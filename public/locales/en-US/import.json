@@ -1,0 +1,12 @@
+{
+  "notifications": {
+    "unsupportedModels": "Unsupported model(s): {{models}}. Please add them in Settings → Custom Models before importing.",
+    "chatsImported": "Imported {{imported}} of {{total}} chats.",
+    "successfulImport": "Import successful!",
+    "quotaExceeded": "Storage quota exceeded. Some data could not be saved.",
+    "nothingImported": "Nothing was imported.",
+    "invalidChatsDataFormat": "Invalid chat data format.",
+    "invalidFormatForVersion": "Invalid format for this version.",
+    "unrecognisedDataFormat": "Unrecognised data format."
+  }
+}

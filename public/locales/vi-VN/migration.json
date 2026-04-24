@@ -1,0 +1,9 @@
+{
+  "migration": {
+    "noPersistedState": "Không tìm thấy dữ liệu đã lưu. Không thể đặt lại phiên bản.",
+    "resetVersionButton": "Đặt lại phiên bản và migrate",
+    "resetVersionDescription": "Thao tác này sẽ đặt lại phiên bản và kích hoạt quá trình migrate.",
+    "confirmTitle": "Xác nhận migrate",
+    "confirmMessage": "Thao tác này sẽ đặt lại phiên bản ứng dụng và kích hoạt quá trình migrate. Dữ liệu của bạn sẽ được chuyển sang phiên bản mới nhất. Bạn có muốn tiếp tục không?"
+  }
+}

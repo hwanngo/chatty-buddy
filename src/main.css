@@ -1,0 +1,448 @@
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+/* Dark mode keyed off an ancestor `.dark` class (set on <html> by
+   App.tsx/ThemeSwitcher) — ancestor-only to match Tailwind 3's `.dark &`
+   semantics the codebase was written against (some elements carry a literal
+   `dark` class to scope dark styles to their children). */
+@custom-variant dark (&:where(.dark *));
+/* Preserved custom variant (was a JS plugin in the old tailwind.config). */
+@custom-variant parent-sibling-hover (.parent-sibling:hover ~ .parent &);
+
+/* Icon-button hit area: centers the glyph and, on touch devices, enforces the
+   44px minimum tap target without bloating the same control on desktop. */
+@utility tap-target {
+  @media (pointer: coarse) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@theme {
+  --font-sans:
+    'DM Sans', ui-sans-serif, system-ui, -apple-system, Arial, sans-serif;
+  --font-serif: 'Lora', Georgia, ui-serif, serif;
+  --font-mono:
+    'DM Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    'Liberation Mono', 'Courier New', monospace;
+}
+
+/* ── Design tokens (warm Anthropic palette) ───────────────────────────────
+   Single source of truth for color. Light values on :root, dark values on
+   .dark — so `bg-[var(--bg-card)]` flips automatically with the theme and no
+   `dark:` pairing is needed. */
+:root {
+  --bg: #f5f4ed;
+  --bg-card: #faf9f5;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f0eee6;
+  --bg-sand: #e8e6dc;
+
+  --fg: #141413;
+  --fg-2: #5e5d59;
+  --fg-3: #6e6d67;
+  --fg-btn: #4d4c48;
+
+  --accent: #b5512f;
+  --accent-hover: #9e4528;
+  --accent-fg: #faf9f5;
+  --accent-text: #b5512f;
+  --coral: #d97757;
+
+  --border: #f0eee6;
+  --border-mid: #e8e6dc;
+  --ring: #d1cfc5;
+  --focus: #3898ec;
+
+  --error: #b53333;
+  --error-hover: #9e2b2b;
+  --error-fg: #ffffff;
+
+  --success: #2d6a2d;
+
+  --btn-dark-bg: #30302e;
+  --btn-dark-hover: #3d3d3a;
+
+  /* Shape */
+  --radius-btn: 8px;
+  --radius-field: 8px;
+  --radius-card: 12px;
+
+  /* Elevation scale */
+  --shadow-whisper: rgba(0, 0, 0, 0.05) 0px 4px 24px;
+  --shadow-ring: 0px 0px 0px 1px #d1cfc5;
+  --shadow-float: rgba(0, 0, 0, 0.12) 0px 6px 20px;
+}
+
+.dark {
+  --bg: #141413;
+  --bg-card: #1c1c1a;
+  --bg-elevated: #30302e;
+  --bg-hover: #3a3a37;
+  --bg-sand: #3d3d3a;
+
+  --fg: #faf9f5;
+  --fg-2: #b0aea5;
+  --fg-3: #87867f;
+  --fg-btn: #b0aea5;
+
+  --accent: #b5512f;
+  --accent-hover: #9e4528;
+  --accent-fg: #faf9f5;
+  --accent-text: #c47459;
+  --coral: #d97757;
+
+  --border: #30302e;
+  --border-mid: #3d3d3a;
+  --ring: #4a4a47;
+  --focus: #3898ec;
+
+  --error: #cb7070;
+  --error-hover: #9e2b2b;
+  --error-fg: #291616;
+
+  --success: #86efac;
+
+  --btn-dark-bg: #30302e;
+  --btn-dark-hover: #3d3d3a;
+
+  /* Elevation scale (dark) */
+  --shadow-whisper: rgba(0, 0, 0, 0.3) 0px 4px 24px;
+  --shadow-ring: 0px 0px 0px 1px #4a4a47;
+  --shadow-float: rgba(0, 0, 0, 0.45) 0px 6px 20px;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  body,
+  html {
+    height: 100%;
+  }
+
+  body {
+    line-height: inherit;
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+  }
+
+  #root {
+    height: 100%;
+  }
+
+  /* Universal keyboard focus ring — the only cool color in the palette. */
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  textarea:focus {
+    outline: none;
+  }
+
+  img {
+    display: inline-block;
+  }
+
+  a.link {
+    text-decoration: underline;
+    color: var(--fg-2);
+  }
+  a.link:hover {
+    color: var(--fg);
+  }
+
+  /* Markdown tables */
+  .markdown table {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+  }
+  .markdown th {
+    background-color: color-mix(in srgb, var(--bg-sand) 40%, transparent);
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    border-top-width: 1px;
+    padding: 0.25rem 0.75rem;
+  }
+  .markdown th:first-child {
+    border-top-left-radius: 0.375rem;
+  }
+  .markdown th:last-child {
+    border-right-width: 1px;
+    border-top-right-radius: 0.375rem;
+  }
+  .markdown td {
+    border-bottom-width: 1px;
+    border-left-width: 1px;
+    padding: 0.25rem 0.75rem;
+  }
+  .markdown td:last-child {
+    border-right-width: 1px;
+  }
+  .markdown tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 0.375rem;
+  }
+  .markdown tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 0.375rem;
+  }
+
+  /* Range inputs */
+  input[type='range'] {
+    -webkit-appearance: none;
+    appearance: none;
+    accent-color: var(--accent);
+  }
+  input[type='range']::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--border-mid);
+  }
+  input[type='range']::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 0 0 1.5px var(--accent);
+    margin-top: -5px;
+  }
+  input[type='range']::-moz-range-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: var(--border-mid);
+  }
+  input[type='range']::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 9999px;
+    background: var(--accent);
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 0 0 1.5px var(--accent);
+    cursor: pointer;
+  }
+
+  /* Scrollbars */
+  ::-webkit-scrollbar {
+    height: 1rem;
+    width: 0.5rem;
+  }
+  @media screen and (max-width: 768px) {
+    ::-webkit-scrollbar {
+      display: none;
+      scrollbar-width: none;
+    }
+  }
+  .hide-scroll-bar::-webkit-scrollbar {
+    display: none;
+    scrollbar-width: none;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--ring);
+    border-radius: 9999px;
+    border-width: 1px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--fg-2);
+  }
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+    border-radius: 9999px;
+  }
+  pre ::-webkit-scrollbar-thumb {
+    display: none;
+  }
+  pre {
+    scrollbar-width: 0;
+  }
+
+  /* Respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@layer components {
+  .btn {
+    align-items: center;
+    border-color: transparent;
+    border-radius: var(--radius-btn);
+    border-width: 1px;
+    display: inline-flex;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 8px 16px;
+    pointer-events: auto;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    transition:
+      background-color 150ms,
+      border-color 150ms,
+      box-shadow 150ms,
+      transform 120ms;
+    outline: none;
+  }
+  .btn:active {
+    transform: scale(0.99);
+  }
+  .btn:focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Terracotta — primary brand CTA */
+  .btn-primary {
+    background-color: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-fg);
+    box-shadow:
+      var(--accent) 0px 0px 0px 0px,
+      var(--accent) 0px 0px 0px 1px;
+  }
+  .btn-primary:hover {
+    background-color: var(--accent-hover);
+    border-color: var(--accent-hover);
+  }
+
+  /* Warm sand — secondary action */
+  .btn-neutral {
+    background-color: var(--bg-sand);
+    border-color: var(--bg-sand);
+    color: var(--fg-btn);
+    box-shadow:
+      var(--bg-sand) 0px 0px 0px 0px,
+      var(--ring) 0px 0px 0px 1px;
+  }
+  .btn-neutral:hover {
+    background-color: var(--ring);
+    border-color: var(--ring);
+  }
+  .dark .btn-neutral {
+    box-shadow:
+      var(--bg-sand) 0px 0px 0px 0px,
+      var(--fg-btn) 0px 0px 0px 1px;
+  }
+  .dark .btn-neutral:hover {
+    background-color: var(--btn-dark-hover);
+    border-color: var(--btn-dark-hover);
+  }
+
+  /* Dark charcoal — CTA on light surfaces */
+  .btn-dark {
+    background-color: var(--btn-dark-bg);
+    border-color: var(--btn-dark-bg);
+    color: var(--accent-fg);
+    box-shadow:
+      var(--btn-dark-bg) 0px 0px 0px 0px,
+      var(--fg-btn) 0px 0px 0px 1px;
+  }
+  .btn-dark:hover {
+    background-color: var(--btn-dark-hover);
+  }
+
+  .btn-small {
+    padding: 5px 12px;
+    font-size: 0.75rem;
+  }
+  .btn-pill {
+    border-radius: 9999px;
+  }
+  .btn-block {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+
+  button.scroll-convo {
+    display: none;
+  }
+
+  /* Markdown lists */
+  .markdown ol,
+  .markdown ul {
+    display: flex;
+    flex-direction: column;
+    padding-left: 1rem;
+  }
+  .markdown ol li,
+  .markdown ol li > p,
+  .markdown ol ol,
+  .markdown ol ul,
+  .markdown ul li,
+  .markdown ul li > p,
+  .markdown ul ol,
+  .markdown ul ul {
+    margin: 0;
+  }
+  .markdown ul li:before {
+    content: '•';
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    margin-left: -1rem;
+    position: absolute;
+  }
+  .markdown pre {
+    padding: 0;
+    margin: 0;
+  }
+}
+
+/* Syntax highlighting (highlight.js) */
+:not(pre) > code.hljs,
+:not(pre) > code[class*='language-'] {
+  border-radius: 0.3em;
+  white-space: normal;
+}
+.hljs-comment {
+  color: hsla(0, 0%, 100%, 0.5);
+}
+.hljs-meta {
+  color: hsla(0, 0%, 100%, 0.6);
+}
+.hljs-built_in,
+.hljs-class .hljs-title {
+  color: #e9950c;
+}
+.hljs-doctag,
+.hljs-formula,
+.hljs-keyword,
+.hljs-literal {
+  color: #2e95d3;
+}
+.hljs-addition,
+.hljs-attribute,
+.hljs-meta-string,
+.hljs-regexp,
+.hljs-string {
+  color: #00a67d;
+}
+.hljs-attr,
+.hljs-number,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-pseudo,
+.hljs-template-variable,
+.hljs-type,
+.hljs-variable {
+  color: #df3079;
+}
+.hljs-bullet,
+.hljs-link,
+.hljs-selector-id,
+.hljs-symbol,
+.hljs-title {
+  color: #f22c3d;
+}

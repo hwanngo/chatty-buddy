@@ -1,0 +1,73 @@
+{
+  "configuration": "Configuration",
+  "model": "Model",
+  "token": {
+    "label": "Max Tokens",
+    "description": "The maximum number of tokens to generate in the chat completion. The total length of input tokens and generated tokens is limited by the model's context length."
+  },
+  "default": "Default",
+  "temperature": {
+    "label": "Temperature",
+    "description": "Controls the randomness of responses, between 0 and 2. Higher values like 0.8 produce more creative output, while lower values like 0.2 produce more focused and deterministic output. We recommend adjusting either Temperature or Top-p, but not both. (Default: 1)"
+  },
+  "presencePenalty": {
+    "label": "Presence Penalty",
+    "description": "Number between -2.0 and 2.0. Positive values encourage the model to introduce new topics not yet mentioned in the conversation. (Default: 0)"
+  },
+  "topP": {
+    "label": "Top-p",
+    "description": "Number between 0 and 1. An alternative to Temperature — the model only considers tokens within the top p probability mass. For example, 0.1 means only tokens in the top 10% probability are considered. We recommend adjusting either Top-p or Temperature, but not both. (Default: 1)"
+  },
+  "frequencyPenalty": {
+    "label": "Frequency Penalty",
+    "description": "Number between -2.0 and 2.0. Positive values reduce the likelihood of the model repeating phrases it has already used. (Default: 0)"
+  },
+  "defaultChatConfig": "Default Chat Config",
+  "defaultSystemMessage": "Default System Message",
+  "resetToDefault": "Reset To Default",
+  "modelTitleGeneration": "Model for title generation",
+  "imageDetail": {
+    "label": "Image Detail",
+    "low": "Low",
+    "high": "High",
+    "auto": "Auto"
+  },
+  "customModels": {
+    "title": "Custom Models",
+    "modelId": "Model ID",
+    "modelName": "Model Name",
+    "modality": "Modality",
+    "textOnly": "Text only",
+    "textAndImage": "Text & Image",
+    "streamSupported": "Stream supported",
+    "streamSupportedDescription": "Enable streaming responses",
+    "showAdvanced": "Show advanced settings",
+    "hideAdvanced": "Hide advanced settings",
+    "advancedSettings": "Advanced Settings",
+    "contextLength": "Context length",
+    "maxCompletionTokens": "Max completion tokens",
+    "pricing": "Pricing (per million tokens)",
+    "promptPrice": "Prompt price",
+    "completionPrice": "Completion price",
+    "requestPrice": "Request price",
+    "imagePrice": "Image price",
+    "addModel": "Add Model",
+    "yourCustomModels": "Your Custom Models",
+    "noModels": "No custom models added yet.",
+    "remove": "Remove",
+    "customLabel": "(Custom)"
+  },
+  "webSearch": {
+    "label": "Web Search",
+    "description": "Allow the model to search the web for up-to-date information. Supported by OpenAI gpt-4o, gpt-4.1 and compatible endpoints."
+  },
+  "searchModels": "Search models…",
+  "reasoningEffort": {
+    "label": "Reasoning",
+    "description": "Controls how much thinking the model does before responding. Supported by OpenAI o1, o3, o4-mini and compatible reasoning models.",
+    "none": "None",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High"
+  }
+}

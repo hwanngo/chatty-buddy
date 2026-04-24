@@ -1,0 +1,16 @@
+{
+  "name": "Đồng bộ Google",
+  "tagline": "Đồng bộ các cuộc trò chuyện và cài đặt của bạn với Google Drive.",
+  "button": {
+    "sync": "Đồng bộ cuộc trò chuyện",
+    "stop": "Dừng đồng bộ",
+    "create": "Tạo file mới",
+    "confirm": "Xác nhận lựa chọn"
+  },
+  "notice": "Lưu ý: Bạn sẽ cần đăng nhập lại sau mỗi lần truy cập hoặc sau mỗi giờ. Để tránh dữ liệu bị ghi đè, không sử dụng Chatty Buddy trên nhiều thiết bị cùng một lúc.",
+  "privacy": "Quyền riêng tư của bạn là ưu tiên hàng đầu. Chatty Buddy chỉ có quyền truy cập giới hạn — chỉ có thể tạo, xem và quản lý các file và thư mục của chính nó.",
+  "toast": {
+    "sync": "Đồng bộ thành công!",
+    "stop": "Đã dừng đồng bộ"
+  }
+}

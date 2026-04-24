@@ -1,0 +1,27 @@
+{
+  "setupApiKey": "Thiết lập API key",
+  "securityMessage": "Chúng tôi ưu tiên bảo mật API key của bạn. Key của bạn chỉ được lưu trữ trên trình duyệt và không bao giờ được chia sẻ với bất kỳ bên thứ ba nào. Nó chỉ được dùng để kết nối với API, không phục vụ bất kỳ mục đích nào khác.",
+  "apiEndpoint": {
+    "inputLabel": "API Endpoint",
+    "description": "Khi bạn chọn một API endpoint không chính thức, nó sẽ hoạt động như một proxy — đóng vai trò trung gian giữa thiết bị của bạn và máy chủ đích. Điều này cho phép bạn truy cập API ở những khu vực có thể bị hạn chế.",
+    "warn": "Nếu bạn sử dụng một endpoint tùy chỉnh cấp quyền truy cập miễn phí, bạn có thể để trống trường API key. Tuy nhiên, hãy thận trọng với các endpoint của bên thứ ba vì chúng có thể ghi lại nội dung cuộc trò chuyện của bạn. Luôn xác minh độ tin cậy của endpoint trước khi sử dụng."
+  },
+  "apiKey": {
+    "howTo": "Lấy API key cá nhân của bạn <0>tại đây</0>.",
+    "inputLabel": "API Key",
+    "browserStorageNote": "Chỉ lưu trong trình duyệt — không bao giờ gửi đến máy chủ nào."
+  },
+  "customEndpoint": "Sử dụng API endpoint tùy chỉnh",
+  "advancedConfig": "Xem cấu hình API nâng cao <0>tại đây</0>",
+  "noApiKeyWarning": "Chưa có API key! Vui lòng kiểm tra cài đặt API của bạn.",
+  "apiVersion": {
+    "inputLabel": "Phiên bản API",
+    "description": "ví dụ: 2024-02-01"
+  },
+  "thirdPartyEndpointWarning": "Endpoint bên thứ ba: API key và toàn bộ tin nhắn của bạn sẽ được gửi đến {{endpoint}}. Chỉ sử dụng các endpoint bạn tin tưởng.",
+  "apiType": {
+    "inputLabel": "Định dạng API",
+    "openai": "Tương thích OpenAI",
+    "anthropic": "Tương thích Anthropic"
+  }
+}
