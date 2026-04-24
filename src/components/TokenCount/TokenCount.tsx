@@ -1,0 +1,82 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import useStore from '@store/store';
+import { shallow } from 'zustand/shallow';
+
+import countTokens from '@utils/messageUtils';
+import { modelCost } from '@constants/modelLoader';
+import useModelsReady from '@hooks/useModelsReady';
+import { TotalTokenUsed, isTextContent, isImageContent } from '@type/chat';
+import { ModelOptions } from '@utils/modelReader';
+
+const tokenCostToCost = (
+  tokenCost: TotalTokenUsed[ModelOptions],
+  model: ModelOptions
+) => {
+  if (!tokenCost) return 0;
+
+  const modelCostEntry = modelCost[model as keyof typeof modelCost];
+
+  if (!modelCostEntry) {
+    return -1; // Return -1 if the model does not exist in modelCost
+  }
+
+  const { prompt, completion, image } = modelCostEntry;
+  const completionCost =
+    (completion.price / completion.unit) * tokenCost.completionTokens;
+  const promptCost = (prompt.price / prompt.unit) * tokenCost.promptTokens;
+  const imageCost =
+    image && tokenCost.imageTokens
+      ? (image.price / image.unit) * (tokenCost.imageTokens ? 1 : 0)
+      : 0;
+
+  return completionCost + promptCost + imageCost;
+};
+
+const TokenCount = React.memo(() => {
+  useModelsReady();
+  const [tokenCount, setTokenCount] = useState<number>(0);
+  const [imageTokenCount, setImageTokenCount] = useState<number>(0);
+  const generating = useStore((state) => state.generating);
+  const messages = useStore((state) =>
+    state.chats ? state.chats[state.currentChatIndex].messages : []
+  );
+
+  const model = useStore((state) =>
+    state.chats
+      ? state.chats[state.currentChatIndex].config.model
+      : 'gpt-3.5-turbo'
+  );
+
+  const cost = useMemo(() => {
+    const tokenCost: TotalTokenUsed[ModelOptions] = {
+      promptTokens: tokenCount,
+      completionTokens: 0,
+      imageTokens: imageTokenCount,
+    };
+    const price = tokenCostToCost(tokenCost, model as ModelOptions);
+    return price < 0.01 ? '<$0.01' : `$${price.toFixed(4)}`;
+  }, [model, tokenCount, imageTokenCount]);
+
+  useEffect(() => {
+    if (!generating) {
+      const textPrompts = messages.filter(
+        (e) => Array.isArray(e.content) && e.content.some(isTextContent)
+      );
+      const imgPrompts = messages.filter(
+        (e) => Array.isArray(e.content) && e.content.some(isImageContent)
+      );
+      const newPromptTokens = countTokens(textPrompts, model);
+      const newImageTokens = countTokens(imgPrompts, model);
+      setTokenCount(newPromptTokens);
+      setImageTokenCount(newImageTokens);
+    }
+  }, [messages, generating, model]);
+
+  return (
+    <span className='text-[11px] text-[#87867f] font-mono tabular-nums'>
+      {tokenCount} tokens · {cost}
+    </span>
+  );
+});
+
+export default TokenCount;

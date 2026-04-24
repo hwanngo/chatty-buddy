@@ -1,0 +1,268 @@
+# =============================================================================
+# Dependencies
+# =============================================================================
+node_modules/
+.pnpm-store/
+.pnp.cjs
+.pnp.loader.mjs
+.yarn/
+.yarnrc.yml
+.yarn-integrity
+package-lock.json
+yarn.lock
+
+# =============================================================================
+# Build outputs
+# =============================================================================
+dist/
+dist-ssr/
+build/
+out/
+release/
+*.local
+
+# =============================================================================
+# Vite & TypeScript
+# =============================================================================
+.vite/
+*.tsbuildinfo
+.tscache/
+
+# =============================================================================
+# Electron
+# =============================================================================
+# Electron-builder outputs (release/ is already covered above)
+# Preload scripts build output if separate
+# Add any electron-specific generated folders here
+
+# =============================================================================
+# Environment & secrets
+# =============================================================================
+.env
+.env.*.local
+.env.development
+.env.test
+.env.production
+.envrc
+*.pem
+*.cert
+*.key
+secrets/
+
+# =============================================================================
+# Logs
+# =============================================================================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# =============================================================================
+# Testing & coverage
+# =============================================================================
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+playwright/.cache/
+*.snap.png
+screenshots/
+videos/
+cypress/screenshots/
+cypress/videos/
+cypress/downloads/
+
+# =============================================================================
+# Cache & temporary files
+# =============================================================================
+.cache/
+.eslintcache
+.stylelintcache
+.prettiercache
+.parcel-cache/
+.cache-loader/
+.turbo/
+.temp/
+.tmp/
+temp/
+tmp/
+*.tmp
+*.temp
+
+# =============================================================================
+# Editor directories and files
+# =============================================================================
+# VS Code
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/*.code-snippets
+*.code-workspace
+.vscode-test/
+
+# JetBrains (WebStorm, IntelliJ, etc.)
+.idea/**
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf
+*.iml
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+.#*
+
+# Nova
+.nova/
+
+# Fleet
+.fleet/
+
+# Zed
+.zed/
+
+# =============================================================================
+# OS generated files
+# =============================================================================
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+.directory
+.Trash-*
+
+# =============================================================================
+# AI development tools
+# =============================================================================
+# Claude Code
+.claude/
+CLAUDE.local.md
+
+# Cursor
+.cursor/
+.cursorrules
+.cursorignore
+
+# Codex CLI
+.codex/
+
+# Superpowers / Sisyphus / GStack
+.superpowers/
+.sisyphus/
+# .gstack/ is kept in Project-specific below
+
+# Aider
+.aider*
+.aider.conf.yml
+.aiderignore
+
+# Continue.dev
+.continue/
+.continueignore
+
+# Cline / Claude-dev
+.cline/
+
+# Roo Code
+.roo/
+
+# Windsurf
+.windsurf/
+
+# Augment
+.augment/
+
+# Superpowers
+docs/superpowers/
+
+# MCP
+.mcp.json
+
+# UX/UI Pro Max
+design-system/
+
+# Generic AI tool directories
+.ai/
+
+# =============================================================================
+# Misc development tools
+# =============================================================================
+# Node version managers
+.nvmrc
+.node-version
+.tool-versions
+
+# Storybook
+storybook-static/
+
+# SvelteKit
+.svelte-kit/
+
+# Docusaurus
+.docusaurus/
+
+# Stryker mutation testing
+.stryker-tmp/
+
+# Grunt
+.grunt/
+
+# Bower
+bower_components/
+
+# JSPM
+jspm_packages/
+
+# Web Modules
+web_modules/
+
+# Serverless
+.serverless/
+
+# FuseBox
+.fusebox/
+
+# DynamoDB Local
+.dynamodb/
+
+# TernJS
+.tern-port
+
+# =============================================================================
+# Project-specific
+# =============================================================================
+# Generated models.json (should be fetched at build time or kept in public/)
+models.json
+
+# GStack tooling
+.gstack/

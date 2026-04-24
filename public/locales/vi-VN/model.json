@@ -1,0 +1,73 @@
+{
+  "configuration": "Cấu hình",
+  "model": "Model",
+  "token": {
+    "label": "Số token tối đa",
+    "description": "Số token tối đa được tạo trong mỗi phản hồi. Giới hạn bởi context length của model."
+  },
+  "default": "Mặc định",
+  "temperature": {
+    "label": "Temperature",
+    "description": "Kiểm soát tính ngẫu nhiên của phản hồi (0–2). Giá trị cao cho kết quả sáng tạo hơn, giá trị thấp cho kết quả nhất quán hơn. Chỉ nên dùng Temperature hoặc Top-p, không dùng cả hai. (Mặc định: 1)"
+  },
+  "presencePenalty": {
+    "label": "Presence Penalty",
+    "description": "Từ -2.0 đến 2.0. Giá trị dương khuyến khích model đề cập đến các chủ đề mới chưa được nhắc đến trong cuộc trò chuyện. (Mặc định: 0)"
+  },
+  "topP": {
+    "label": "Top-p",
+    "description": "Từ 0 đến 1. Thay thế cho Temperature — model chỉ chọn từ nhóm token có tổng xác suất là p. Ví dụ, 0.1 nghĩa là chỉ xét trong top 10% xác suất. Chỉ nên dùng Top-p hoặc Temperature, không dùng cả hai. (Mặc định: 1)"
+  },
+  "frequencyPenalty": {
+    "label": "Frequency Penalty",
+    "description": "Từ -2.0 đến 2.0. Giá trị dương giảm khả năng model lặp lại các từ hoặc cụm từ đã dùng. (Mặc định: 0)"
+  },
+  "defaultChatConfig": "Cấu hình chat mặc định",
+  "defaultSystemMessage": "System message mặc định",
+  "resetToDefault": "Đặt lại mặc định",
+  "modelTitleGeneration": "Model tạo tiêu đề",
+  "imageDetail": {
+    "label": "Độ chi tiết hình ảnh",
+    "low": "Thấp",
+    "high": "Cao",
+    "auto": "Tự động"
+  },
+  "customModels": {
+    "title": "Model tùy chỉnh",
+    "modelId": "Model ID",
+    "modelName": "Tên model",
+    "modality": "Modality",
+    "textOnly": "Chỉ văn bản",
+    "textAndImage": "Văn bản & Hình ảnh",
+    "streamSupported": "Hỗ trợ streaming",
+    "streamSupportedDescription": "Bật chế độ phản hồi streaming",
+    "showAdvanced": "Hiện cài đặt nâng cao",
+    "hideAdvanced": "Ẩn cài đặt nâng cao",
+    "advancedSettings": "Cài đặt nâng cao",
+    "contextLength": "Độ dài context",
+    "maxCompletionTokens": "Token completion tối đa",
+    "pricing": "Giá (mỗi triệu token)",
+    "promptPrice": "Giá prompt",
+    "completionPrice": "Giá completion",
+    "requestPrice": "Giá mỗi request",
+    "imagePrice": "Giá hình ảnh",
+    "addModel": "Thêm model",
+    "yourCustomModels": "Model tùy chỉnh của bạn",
+    "noModels": "Chưa có model tùy chỉnh nào.",
+    "remove": "Xóa",
+    "customLabel": "(Tùy chỉnh)"
+  },
+  "webSearch": {
+    "label": "Tìm kiếm web",
+    "description": "Cho phép model tìm kiếm web để lấy thông tin mới nhất. Hỗ trợ OpenAI gpt-4o, gpt-4.1 và các endpoint tương thích."
+  },
+  "searchModels": "Tìm kiếm model…",
+  "reasoningEffort": {
+    "label": "Suy luận",
+    "description": "Kiểm soát mức độ suy nghĩ của model trước khi trả lời. Hỗ trợ OpenAI o1, o3, o4-mini và các reasoning model tương thích.",
+    "none": "Không",
+    "low": "Thấp",
+    "medium": "Trung bình",
+    "high": "Cao"
+  }
+}

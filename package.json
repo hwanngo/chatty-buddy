@@ -1,0 +1,102 @@
+{
+  "name": "chatty-buddy",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "homepage": "./",
+  "main": "electron/index.cjs",
+  "author": "Hwan Ngo",
+  "description": "Play and chat smarter with chatty-buddy - an amazing open-source web app with a chatty-buddy API!",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "electron": "concurrently -k \"BROWSER=none pnpm dev\" \"wait-on tcp:5173 && electron .\"",
+    "pack": "pnpm build && electron-builder --dir",
+    "make": "pnpm build && electron-builder",
+    "debug": "concurrently -k \"cross-env BROWSER=none pnpm dev\" \"wait-on tcp:5173 && electron --inspect=5858 .\""
+  },
+  "build": {
+    "appId": "chatty-buddy",
+    "productName": "chatty-buddy",
+    "artifactName": "${os}-${name}-${version}-${arch}.${ext}",
+    "directories": {
+      "output": "release"
+    },
+    "dmg": {
+      "title": "${productName} ${version}",
+      "icon": "dist/icon-rounded-macos.png"
+    },
+    "mac": {
+      "icon": "dist/icon-rounded-macos.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        "tar.gz",
+        "AppImage"
+      ],
+      "category": "Chat",
+      "icon": "dist/icon-rounded.png"
+    },
+    "win": {
+      "target": "NSIS",
+      "icon": "dist/icon-rounded.png"
+    }
+  },
+  "dependencies": {
+    "@dqbd/tiktoken": "^1.0.22",
+    "@react-oauth/google": "^0.13.5",
+    "electron-is-dev": "^3.0.1",
+    "electron-squirrel-startup": "^1.0.1",
+    "electron-updater": "^6.8.3",
+    "html2canvas": "^1.4.1",
+    "i18next": "^26.0.6",
+    "i18next-browser-languagedetector": "^8.2.1",
+    "i18next-http-backend": "^3.0.5",
+    "katex": "^0.16.45",
+    "lodash": "^4.18.1",
+    "match-sorter": "^8.3.0",
+    "papaparse": "^5.5.3",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "react-i18next": "^17.0.4",
+    "react-markdown": "^10.1.0",
+    "react-scroll-to-bottom": "^4.2.0",
+    "react-select": "^5.10.2",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "uuid": "^14.0.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
+    "@types/lodash": "^4.17.24",
+    "@types/papaparse": "^5.5.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/react-scroll-to-bottom": "^4.2.5",
+    "@vitejs/plugin-react-swc": "^4.3.0",
+    "autoprefixer": "^10.5.0",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^41.2.2",
+    "electron-builder": "^26.8.1",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.19",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.9",
+    "vite-plugin-wasm": "^3.6.0",
+    "wait-on": "^9.0.5"
+  }
+}

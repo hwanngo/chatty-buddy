@@ -1,0 +1,6 @@
+{
+  "title": "Về Chatty Buddy",
+  "paragraph1": "Chatty Buddy là giao diện chat gọn nhẹ dành cho các API tương thích OpenAI. Kết nối với OpenAI, Azure OpenAI, OpenRouter hoặc bất kỳ endpoint tùy chỉnh nào — API key được lưu cục bộ và không bao giờ rời khỏi thiết bị của bạn.",
+  "paragraph2": "Hỗ trợ các model văn bản và hình ảnh, system prompt tùy chỉnh, cấu hình riêng từng cuộc trò chuyện, thư viện prompt và đồng bộ Google Drive. Chạy trên trình duyệt hoặc như ứng dụng desktop qua Electron.",
+  "paragraph3": "Các cuộc trò chuyện được lưu trong local storage của trình duyệt. Không cần tài khoản, không thu thập dữ liệu."
+}

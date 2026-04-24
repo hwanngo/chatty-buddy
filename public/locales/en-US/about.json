@@ -1,0 +1,6 @@
+{
+  "title": "About Chatty Buddy",
+  "paragraph1": "Chatty Buddy is a clean, lightweight chat interface for OpenAI-compatible APIs. Connect to OpenAI, Azure OpenAI, OpenRouter, or any custom endpoint — your API key is stored locally and never leaves your device.",
+  "paragraph2": "Supports text and vision models, custom system prompts, per-chat configuration, prompt libraries, and Google Drive sync. Runs in the browser or as a desktop app via Electron.",
+  "paragraph3": "Your conversations are saved in your browser's local storage. No account required, no data collected."
+}

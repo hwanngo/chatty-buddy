@@ -1,0 +1,12 @@
+{
+  "notifications": {
+    "unsupportedModels": "Model không được hỗ trợ: {{models}}. Vui lòng thêm vào Cài đặt → Model tùy chỉnh trước khi nhập.",
+    "chatsImported": "Đã nhập {{imported}} / {{total}} cuộc trò chuyện.",
+    "successfulImport": "Nhập thành công!",
+    "quotaExceeded": "Vượt quá dung lượng lưu trữ. Một số dữ liệu không thể được lưu.",
+    "nothingImported": "Không có gì được nhập.",
+    "invalidChatsDataFormat": "Định dạng dữ liệu chat không hợp lệ.",
+    "invalidFormatForVersion": "Định dạng không hợp lệ cho phiên bản này.",
+    "unrecognisedDataFormat": "Định dạng dữ liệu không được nhận dạng."
+  }
+}
