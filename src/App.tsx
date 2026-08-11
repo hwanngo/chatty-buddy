@@ -42,35 +42,70 @@ function App() {
   useEffect(() => {
     return onModelsReady(() => {
       const latest = getLatestOpenAIModel(modelOptions);
-      if (!latest) return;
       useStore.setState((prev) => {
-        if (!prev.autoModel) return {};
-        const prevModel = prev.defaultChatConfig.model;
         const patch: Partial<typeof prev> = {};
-        if (prevModel !== latest)
-          patch.defaultChatConfig = { ...prev.defaultChatConfig, model: latest };
-        if (prev.titleModel !== latest) patch.titleModel = latest;
 
-        // The first chat is created at startup with the fallback model before
-        // the list loads. Bump any *empty* chat (no user/assistant turn yet)
-        // that's still on the old default — so the fresh chat sitting behind the
-        // API-key setup modal ends up on the latest, never the stale fallback.
-        // Real conversations are left untouched.
-        if (prev.chats && prevModel !== latest) {
-          const isEmpty = (c: ChatInterface) =>
-            !c.messages.some(
-              (m) => m.role === 'user' || m.role === 'assistant'
-            );
-          if (
-            prev.chats.some((c) => c.config.model === prevModel && isEmpty(c))
-          ) {
-            patch.chats = prev.chats.map((c) =>
-              c.config.model === prevModel && isEmpty(c)
-                ? { ...c, config: { ...c.config, model: latest } }
+        if (latest && prev.autoModel) {
+          const prevModel = prev.defaultChatConfig.model;
+          if (prevModel !== latest)
+            patch.defaultChatConfig = {
+              ...prev.defaultChatConfig,
+              model: latest,
+            };
+          if (prev.titleModel !== latest) patch.titleModel = latest;
+
+          // The first chat is created at startup with the fallback model before
+          // the list loads. Bump any *empty* chat (no user/assistant turn yet)
+          // that's still on the old default — so the fresh chat sitting behind the
+          // API-key setup modal ends up on the latest, never the stale fallback.
+          // Real conversations are left untouched.
+          if (prev.chats && prevModel !== latest) {
+            const isEmpty = (c: ChatInterface) =>
+              !c.messages.some(
+                (m) => m.role === 'user' || m.role === 'assistant'
+              );
+            if (
+              prev.chats.some((c) => c.config.model === prevModel && isEmpty(c))
+            ) {
+              patch.chats = prev.chats.map((c) =>
+                c.config.model === prevModel && isEmpty(c)
+                  ? { ...c, config: { ...c.config, model: latest } }
+                  : c
+              );
+            }
+          }
+        }
+
+        // Separately from the autoModel rule above — which tracks the newest
+        // OpenAI release — a reload can publish a list that doesn't contain the
+        // configured model at all (switch to a local Ollama and `gpt-5.4` is
+        // simply gone). That leaves the picker blank and new chats aimed at a
+        // model the server will reject, so anything *absent from the list*
+        // falls back to the first option. A model still in the list is never
+        // touched, whatever autoModel says.
+        const fallback = modelOptions[0];
+        if (fallback) {
+          const isServed = (model: string) => modelOptions.includes(model);
+          const nextConfig = patch.defaultChatConfig ?? prev.defaultChatConfig;
+          if (!isServed(nextConfig.model))
+            patch.defaultChatConfig = { ...nextConfig, model: fallback };
+          if (!isServed(patch.titleModel ?? prev.titleModel))
+            patch.titleModel = fallback;
+
+          // Only the chat the user is looking at: rewriting every stored chat's
+          // model would rewrite history the user may want back when they point
+          // the app at the original endpoint again.
+          const chats = patch.chats ?? prev.chats;
+          const current = chats?.[prev.currentChatIndex];
+          if (current && !isServed(current.config.model)) {
+            patch.chats = chats!.map((c, i) =>
+              i === prev.currentChatIndex
+                ? { ...c, config: { ...c.config, model: fallback } }
                 : c
             );
           }
         }
+
         return patch;
       });
     });

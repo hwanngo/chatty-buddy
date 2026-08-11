@@ -3,7 +3,11 @@ import { useTranslation } from 'react-i18next';
 import Dialog from '@components/Dialog';
 import { ConfigInterface, ImageDetail } from '@type/chat';
 import Combobox from '@components/Combobox';
-import { modelOptions, modelMaxToken } from '@constants/modelLoader';
+import {
+  modelOptions,
+  modelMaxToken,
+  onModelsReady,
+} from '@constants/modelLoader';
 import { ModelOptions } from '@utils/modelReader';
 import useStore from '@store/store';
 
@@ -102,11 +106,17 @@ export const ModelSelector = ({
 
   // Update model options when custom models change
   useEffect(() => {
-    const customModelIds = customModels.map((model) => model.id);
-    const defaultModelIds = modelOptions.filter(
-      (id) => !customModelIds.includes(id)
-    );
-    setLocalModelOptions([...customModelIds, ...defaultModelIds]);
+    const sync = () => {
+      const customModelIds = customModels.map((model) => model.id);
+      const defaultModelIds = modelOptions.filter(
+        (id) => !customModelIds.includes(id)
+      );
+      setLocalModelOptions([...customModelIds, ...defaultModelIds]);
+    };
+    // onModelsReady runs `sync` immediately when a list is already loaded and
+    // again after every reload (e.g. the API endpoint changed), so calling it
+    // here as well would only cost a second state write on mount.
+    return onModelsReady(sync);
   }, [customModels]);
 
   const modelOptionsFormatted = Array.from(new Set(localModelOptions)).map(

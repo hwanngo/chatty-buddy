@@ -17,7 +17,6 @@ import {
   _defaultImageDetail,
 } from '@constants/chat';
 import ExportV1, { OpenAIChat, OpenAIPlaygroundJSON } from '@type/export';
-import { modelOptions } from '@constants/modelLoader';
 import i18next from 'i18next';
 
 export const validateAndFixChats = (chats: any): chats is ChatInterface[] => {
@@ -73,7 +72,13 @@ const validateAndFixChatConfig = (config: ConfigInterface) => {
   if (!(typeof config.frequency_penalty === 'number')) return false;
 
   if (!config.model) config.model = defaultModel;
-  if (!modelOptions.includes(config.model)) return false;
+  // A model id the current list doesn't contain is not a malformed chat: the
+  // list now depends on the configured endpoint, so a chat exported while
+  // pointed at another endpoint (or at the hosted catalog) would otherwise
+  // make the whole file unimportable. The id is kept as-is and the importer
+  // raises a warning toast instead — see warnUnsupportedModels in
+  // ImportChat.tsx.
+  if (!(typeof config.model === 'string')) return false;
 
   return true;
 };

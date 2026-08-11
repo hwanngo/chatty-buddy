@@ -1,6 +1,6 @@
 {
   "notifications": {
-    "unsupportedModels": "Model không được hỗ trợ: {{models}}. Vui lòng thêm vào Cài đặt → Model tùy chỉnh trước khi nhập.",
+    "unsupportedModels": "Các cuộc trò chuyện vừa nhập dùng model không có trong danh sách của endpoint hiện tại: {{models}}. Hãy chọn model khác cho những cuộc trò chuyện đó, hoặc thêm chúng trong Cài đặt → Model tùy chỉnh.",
     "chatsImported": "Đã nhập {{imported}} / {{total}} cuộc trò chuyện.",
     "successfulImport": "Nhập thành công!",
     "quotaExceeded": "Vượt quá dung lượng lưu trữ. Một số dữ liệu không thể được lưu.",

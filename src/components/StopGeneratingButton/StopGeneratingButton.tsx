@@ -3,46 +3,42 @@ import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
 import { abortActiveController } from '@utils/abortController';
 
+/**
+ * Interrupt control for an in-flight response. It sits in the composer toolbar
+ * in the send button's slot — the send button hides while generating, so the
+ * stop control takes its place and the row keeps its shape.
+ */
 const StopGeneratingButton = () => {
   const { t } = useTranslation();
-  const setGenerating = useStore((state) => state.setGenerating);
   const generating = useStore((state) => state.generating);
 
   // Abort the in-flight request (works for streaming and non-streaming alike)
   // and flip the flag so the loop and UI stop immediately.
   const handleGeneratingStop = () => {
     abortActiveController();
-    setGenerating(false);
+    useStore.getState().setGenerating(false);
   };
 
-  return generating ? (
-    <div
-      className='absolute bottom-6 left-0 right-0 m-auto flex md:w-full md:m-auto gap-0 md:gap-2 justify-center'
-      onClick={() => handleGeneratingStop()}
+  if (!generating) return null;
+
+  return (
+    <button
+      type='button'
+      onClick={handleGeneratingStop}
+      aria-label={t('stopGenerating') as string}
+      className='flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-lg border border-[var(--border-mid)] bg-[var(--bg-hover)] text-[var(--fg-2)] text-[13px] font-medium hover:bg-[var(--bg-sand)] hover:text-[var(--fg)] transition-colors duration-150 cursor-pointer'
     >
-      <button
-        className='btn relative btn-neutral border-0 md:border min-h-[44px]'
-        aria-label={t('stopGenerating')}
+      <svg
+        viewBox='0 0 24 24'
+        className='h-3.5 w-3.5'
+        fill='currentColor'
+        aria-hidden='true'
+        xmlns='http://www.w3.org/2000/svg'
       >
-        <div className='flex w-full items-center justify-center gap-2'>
-          <svg
-            stroke='currentColor'
-            fill='none'
-            strokeWidth='1.5'
-            viewBox='0 0 24 24'
-            strokeLinecap='round'
-            strokeLinejoin='round'
-            className='h-4 w-4'
-            xmlns='http://www.w3.org/2000/svg'
-          >
-            <rect x='3' y='3' width='18' height='18' rx='2' ry='2'></rect>
-          </svg>
-          {t('stopGenerating')}
-        </div>
-      </button>
-    </div>
-  ) : (
-    <></>
+        <rect x='6' y='6' width='12' height='12' rx='1.5' />
+      </svg>
+      {t('stop')}
+    </button>
   );
 };
 

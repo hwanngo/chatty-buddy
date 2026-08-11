@@ -13,6 +13,7 @@ import {
 } from '@constants/auth';
 import { isAzureEndpoint } from '@utils/api';
 import { ApiType } from '@store/auth-slice';
+import { reloadModels } from '@constants/modelLoader';
 
 const ApiMenu = ({
   setIsModalOpen,
@@ -50,6 +51,9 @@ const ApiMenu = ({
     setApiEndpoint(_apiEndpoint);
     setApiVersion(_apiVersion);
     setApiType(_apiType);
+    // The new endpoint may serve an entirely different set of models; refresh
+    // the picker in the background rather than making the user reload.
+    void reloadModels();
     setIsModalOpen(false);
   };
 

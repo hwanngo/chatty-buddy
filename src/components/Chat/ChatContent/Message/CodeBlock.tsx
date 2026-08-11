@@ -12,7 +12,7 @@ const CodeBlock = ({
   const codeRef = useRef<HTMLElement | null>(null);
 
   return (
-    <div className='bg-black rounded-md'>
+    <div className='bg-[var(--code-bg)] text-[var(--code-fg)] border border-[var(--border-mid)] rounded-md overflow-hidden'>
       <CodeBar lang={lang} codeRef={codeRef} />
       <div className='p-4 overflow-y-auto'>
         <code ref={codeRef} className={`!whitespace-pre hljs language-${lang}`}>
@@ -33,7 +33,7 @@ const CodeBar = React.memo(
   }) => {
     const [isCopied, setIsCopied] = useState<boolean>(false);
     return (
-      <div className='flex items-center relative text-[var(--accent-fg)] bg-[var(--btn-dark-bg)] px-4 py-2 text-xs font-sans'>
+      <div className='flex items-center relative text-[var(--code-fg)] bg-[var(--code-bar-bg)] px-4 py-2 text-xs font-sans'>
         <span className=''>{lang}</span>
         <button
           className='flex ml-auto gap-2 transition-colors hover:text-[var(--fg-3)]'

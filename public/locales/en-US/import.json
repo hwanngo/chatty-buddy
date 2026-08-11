@@ -1,6 +1,6 @@
 {
   "notifications": {
-    "unsupportedModels": "Unsupported model(s): {{models}}. Please add them in Settings → Custom Models before importing.",
+    "unsupportedModels": "Imported chats use model(s) the current endpoint doesn't list: {{models}}. Pick another model for those chats, or add them under Settings → Custom Models.",
     "chatsImported": "Imported {{imported}} of {{total}} chats.",
     "successfulImport": "Import successful!",
     "quotaExceeded": "Storage quota exceeded. Some data could not be saved.",

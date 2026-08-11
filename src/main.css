@@ -66,6 +66,19 @@
   --btn-dark-bg: #30302e;
   --btn-dark-hover: #3d3d3a;
 
+  /* Code blocks. Kept as their own tokens so the block follows the active theme
+     instead of being permanently dark, and so the highlight.js palette below
+     has a matching set of light values. */
+  --code-bg: #f2f0e9;
+  --code-bar-bg: #e4e1d6;
+  --code-fg: #26262a;
+  --code-muted: rgba(38, 38, 42, 0.55);
+  --code-builtin: #9a5b00;
+  --code-keyword: #1f6feb;
+  --code-string: #0a7a5c;
+  --code-variable: #b3246b;
+  --code-title: #c0341d;
+
   /* Shape */
   --radius-btn: 8px;
   --radius-field: 8px;
@@ -113,6 +126,22 @@
   --shadow-whisper: rgba(0, 0, 0, 0.3) 0px 4px 24px;
   --shadow-ring: 0px 0px 0px 1px #4a4a47;
   --shadow-float: rgba(0, 0, 0, 0.45) 0px 6px 20px;
+}
+
+/* Code-block and syntax tokens are keyed to the document theme (`:root.dark`)
+   rather than the generic `.dark` class: message bodies carry a literal `dark`
+   class to scope dark styling to their children, which would otherwise pin the
+   code block to its dark palette on a light page. */
+:root.dark {
+  --code-bg: #0d0d0c;
+  --code-bar-bg: #30302e;
+  --code-fg: #ececf1;
+  --code-muted: hsla(0, 0%, 100%, 0.5);
+  --code-builtin: #e9950c;
+  --code-keyword: #2e95d3;
+  --code-string: #00a67d;
+  --code-variable: #df3079;
+  --code-title: #f22c3d;
 }
 
 @layer base {
@@ -370,12 +399,18 @@
     display: none;
   }
 
-  /* Markdown lists */
+  /* Markdown lists. Keep native list layout: `display: flex` detaches the
+     marker box, which left nested lists rendering their bullet on a line of
+     its own. */
   .markdown ol,
   .markdown ul {
-    display: flex;
-    flex-direction: column;
-    padding-left: 1rem;
+    padding-left: 1.25rem;
+  }
+  .markdown ul {
+    list-style: disc;
+  }
+  .markdown ol {
+    list-style: decimal;
   }
   .markdown ol li,
   .markdown ol li > p,
@@ -387,17 +422,41 @@
   .markdown ul ul {
     margin: 0;
   }
-  .markdown ul li:before {
-    content: '•';
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    margin-left: -1rem;
-    position: absolute;
-  }
   .markdown pre {
     padding: 0;
     margin: 0;
   }
+}
+
+/* Table cell padding. Typography zeroes padding-inline-start on the first cell
+   of a row (it styles borderless tables); this table has borders, so the text
+   ends up flush against them. Unlayered, for the same reason as below. */
+.markdown th,
+.markdown td {
+  padding: 0.25rem 0.75rem;
+}
+
+/* Inline code. Tailwind Typography wraps inline <code> in literal backticks via
+   ::before/::after and colours it for its own palette; ContentView draws the
+   chip instead. These rules are deliberately unlayered — inside an @layer they
+   lose to the prose styles no matter how specific they are. */
+/* Typography's backticks have to go for *every* code element: CodeBlock renders
+   its <code class="hljs"> in a plain <div>, not a <pre>, so a fenced block is
+   just as exposed to code::before as an inline span is. */
+.markdown code::before,
+.markdown code::after {
+  content: none;
+}
+
+/* The chip, by contrast, is inline-only — `.hljs` marks block code, which is
+   never inline and already sits on its own --code-bg surface. */
+.markdown :not(pre) > code:not(.hljs) {
+  /* Derived from the surrounding text rather than a theme token: the message
+     body carries a hard-coded `dark` class, so --bg-hover would resolve to its
+     dark value on a light page. */
+  background-color: color-mix(in srgb, currentColor 10%, transparent);
+  color: inherit;
+  font-weight: inherit;
 }
 
 /* Syntax highlighting (highlight.js) */
@@ -406,28 +465,26 @@
   border-radius: 0.3em;
   white-space: normal;
 }
-.hljs-comment {
-  color: hsla(0, 0%, 100%, 0.5);
-}
+.hljs-comment,
 .hljs-meta {
-  color: hsla(0, 0%, 100%, 0.6);
+  color: var(--code-muted);
 }
 .hljs-built_in,
 .hljs-class .hljs-title {
-  color: #e9950c;
+  color: var(--code-builtin);
 }
 .hljs-doctag,
 .hljs-formula,
 .hljs-keyword,
 .hljs-literal {
-  color: #2e95d3;
+  color: var(--code-keyword);
 }
 .hljs-addition,
 .hljs-attribute,
 .hljs-meta-string,
 .hljs-regexp,
 .hljs-string {
-  color: #00a67d;
+  color: var(--code-string);
 }
 .hljs-attr,
 .hljs-number,
@@ -437,12 +494,12 @@
 .hljs-template-variable,
 .hljs-type,
 .hljs-variable {
-  color: #df3079;
+  color: var(--code-variable);
 }
 .hljs-bullet,
 .hljs-link,
 .hljs-selector-id,
 .hljs-symbol,
 .hljs-title {
-  color: #f22c3d;
+  color: var(--code-title);
 }

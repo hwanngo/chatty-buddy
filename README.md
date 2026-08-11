@@ -20,6 +20,7 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 - [Quick Start](#quick-start)
 - [Development](#development)
 - [Environment Variables](#environment-variables)
+- [Local & LAN Endpoints](#local--lan-endpoints)
 - [Project Structure](#project-structure)
 - [Architecture](#architecture)
   - [State Management](#state-management)
@@ -186,6 +187,61 @@ VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 ### Security Warning
 
 **Never commit `.env` files containing real API keys.** The `.env.example` file is safe to commit as a template. If you deploy to a public host, always instruct users to enter their own API keys in the UI.
+
+---
+
+## Local & LAN Endpoints
+
+chatty-buddy talks to any OpenAI-compatible server, including a locally running model server such
+as [Ollama](https://ollama.com) — not just hosted providers. Set **API Format** to **OpenAI
+Compatible**, enable **Use custom API endpoint**, and enter:
+
+- `http://localhost:11434/v1/chat/completions` for Ollama running on the same machine
+- `http://<lan-ip>:11434/v1/chat/completions` for Ollama running on another machine on your network
+
+Leave the API key field blank — Ollama doesn't require one.
+
+The model picker is populated from that endpoint automatically: the app asks it for its own model
+list (`GET …/v1/models`), and the built-in catalog is skipped while the endpoint answers. If the
+endpoint doesn't respond — unreachable, no `/models` route, CORS refused — the picker falls back to
+the built-in catalog and the app carries on.
+
+A few details worth knowing:
+
+- **Custom endpoints only.** The built-in OpenAI and Anthropic endpoints are never asked; they keep
+  the curated catalog, with its real context windows and pricing. Anything else — a LAN address, a
+  Tailscale URL, a self-hosted proxy — counts as custom and is asked.
+- **The request carries no API key.** It runs at startup and whenever you save API settings, before
+  you've sent anything, so no credential is transmitted to it. An endpoint that requires
+  authentication simply answers 401 and the catalog is used instead.
+- **Models the catalog doesn't recognise** get conservative metadata: an 8192-token context window
+  and no cost tracking. Image attachment is offered for them, since local vision models are a common
+  case; if a model can't accept images the server will say so. Register the model under
+  **Settings → Custom Models** to give it exact numbers.
+
+### Ollama CORS
+
+By default Ollama rejects browser requests from origins it doesn't recognize — its CORS preflight
+returns 403. Tell it to accept the app's origin via `OLLAMA_ORIGINS`. For the deployed app:
+
+```bash
+OLLAMA_ORIGINS="https://hwanngo.github.io" OLLAMA_HOST=0.0.0.0:11434 ollama serve
+```
+
+`OLLAMA_HOST=0.0.0.0:11434` is what makes Ollama reachable from other devices on the network;
+drop it for a local-machine-only setup. For local development (`pnpm dev`, `http://localhost:5173`),
+use `OLLAMA_ORIGINS="http://localhost:5173"` instead.
+
+### Plaintext HTTP
+
+Plaintext `http://` endpoints are permitted only for addresses that name the local machine or the
+local network: loopback, RFC1918 ranges (`10.x`, `172.16–31.x`, `192.168.x`), link-local addresses,
+`.local` / `.lan` / `.internal` / `.home.arpa` suffixes, and single-label host names. Any host with
+a public domain name still requires `https://`.
+
+One caveat on single-label names: a bare name like `ollama` is resolved by your operating system,
+and if it is configured with a DNS search suffix that name can expand to a public domain. Prefer a
+LAN IP address or a `.local` / `.internal` name when the endpoint takes an API key.
 
 ---
 

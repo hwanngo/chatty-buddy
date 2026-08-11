@@ -32,6 +32,10 @@ export const initPromise = i18n
     },
     ns: namespace,
     defaultNS: 'main',
+    // React escapes everything it renders, so i18next's own HTML-escaping is
+    // redundant — and visible: it turns the `/` of an interpolated URL into
+    // `&#x2F;`, which React then prints literally.
+    interpolation: { escapeValue: false },
     react: { useSuspense: false },
   });
 

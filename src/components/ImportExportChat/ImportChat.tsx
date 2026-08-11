@@ -15,7 +15,10 @@ import {
 
 import { modelOptions } from '@constants/modelLoader';
 
-// Helper to detect and warn about unknown model IDs referenced in imported chats
+// Helper to detect and warn about model IDs the current model list doesn't
+// contain. The import itself still goes through: the list depends on the
+// configured API endpoint, so a chat exported against a different endpoint
+// carries a perfectly valid id this session simply can't serve.
 const warnUnsupportedModels = (
   chats: any[],
   t: (key: string, opts?: any) => string
@@ -34,7 +37,7 @@ const warnUnsupportedModels = (
         ns: 'import',
         models: unsupportedModels.join(', '),
       }) ||
-      `Unsupported model(s): ${unsupportedModels.join(', ')}. Please add them in Settings → Custom Models before importing.`;
+      `Imported chats use model(s) the current endpoint doesn't list: ${unsupportedModels.join(', ')}. Pick another model for those chats, or add them under Settings → Custom Models.`;
     useStore.getState().addToast('warning', msg);
     return true;
   }
@@ -123,6 +126,10 @@ const ImportChat = () => {
                 isLegacyImport(chatsToImport)
               ) {
                 if (validateAndFixChats(chatsToImport)) {
+                  // Unknown model ids no longer block the import; flag them so
+                  // the user knows why those chats can't be sent as-is.
+                  warnUnsupportedModels(chatsToImport, t);
+
                   // import new folders
                   const folderNameToIdMap: Record<string, string> = {};
                   const parsedFolders: string[] = [];
@@ -196,9 +203,9 @@ const ImportChat = () => {
                     };
                   }
                 } else {
-                  // Validate unsupported model IDs and inform user
-                  warnUnsupportedModels(chatsToImport, t);
-
+                  // No model warning here any more: an unknown model id can no
+                  // longer be why validation failed, so raising it would point
+                  // at the wrong thing.
                   return {
                     success: false,
                     message: t('notifications.invalidChatsDataFormat', {
@@ -210,6 +217,8 @@ const ImportChat = () => {
                 switch ((parsedData as ExportBase).version) {
                   case 1:
                     if (validateExportV1(parsedData)) {
+                      warnUnsupportedModels(parsedData.chats ?? [], t);
+
                       // increment the order of existing folders
                       const offset = Object.keys(parsedData.folders).length;
 

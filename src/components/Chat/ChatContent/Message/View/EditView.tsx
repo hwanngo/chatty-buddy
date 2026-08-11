@@ -15,6 +15,7 @@ import {
 
 import Dialog from '@components/Dialog';
 import ConfigMenu from '@components/ConfigMenu';
+import StopGeneratingButton from '@components/StopGeneratingButton/StopGeneratingButton';
 import { defaultModel, _defaultChatConfig } from '@constants/chat';
 import { officialAPIEndpoint } from '@constants/auth';
 import Icon from '@components/Icon';
@@ -1066,6 +1067,8 @@ const InputToolbar = ({
             )}
           </div>
         )}
+
+        {generating && <StopGeneratingButton />}
 
         {!generating && (
           <button

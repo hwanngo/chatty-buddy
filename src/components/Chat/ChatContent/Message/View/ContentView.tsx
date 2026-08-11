@@ -154,6 +154,7 @@ const ContentView = memo(
               ]}
               components={{
                 code,
+                pre,
                 p,
               }}
             >
@@ -248,20 +249,43 @@ const ContentView = memo(
   }
 );
 
-interface CodeComponentProps extends React.HTMLAttributes<HTMLElement> {
-  inline?: boolean;
-}
+/**
+ * Inline code. react-markdown v10 dropped the `inline` prop this used to branch
+ * on, so inline spans and fenced blocks are told apart by their wrapper
+ * instead: only block code is nested in a <pre>, which `pre` below renders.
+ */
+const code = memo((props: React.HTMLAttributes<HTMLElement>) => {
+  const { className, children } = props;
+  return (
+    <code
+      className={`${className ?? ''} rounded px-1 py-0.5 text-[0.9em] font-mono`.trim()}
+    >
+      {children}
+    </code>
+  );
+});
 
-const code = memo((props: CodeComponentProps) => {
-  const { inline, className, children } = props;
-  const match = /language-(\w+)/.exec(className || '');
-  const lang = match && match[1];
+/**
+ * Fenced code blocks. The <code> element markdown puts inside carries the
+ * `language-*` class and the (already syntax-highlighted) content, so unwrap it
+ * and hand both to CodeBlock rather than nesting a second <code>.
+ */
+const pre = memo((props: React.HTMLAttributes<HTMLPreElement>) => {
+  const child = React.Children.toArray(props.children)[0];
+  const codeEl = React.isValidElement<{
+    className?: string;
+    children?: React.ReactNode;
+  }>(child)
+    ? child
+    : undefined;
+  const lang = /language-(\w+)/.exec(codeEl?.props.className ?? '')?.[1];
 
-  if (inline) {
-    return <code className={className}>{children}</code>;
-  } else {
-    return <CodeBlock lang={lang || 'text'} codeChildren={children} />;
-  }
+  return (
+    <CodeBlock
+      lang={lang || 'text'}
+      codeChildren={codeEl ? codeEl.props.children : props.children}
+    />
+  );
 });
 
 const p = memo((props: React.HTMLAttributes<HTMLParagraphElement>) => {

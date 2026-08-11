@@ -1,6 +1,11 @@
 import { ModelCost } from '@type/chat';
 import useStore from '@store/store';
 import i18next from 'i18next';
+import { fetchEndpointModels } from '@utils/endpointModels';
+import {
+  buildEndpointModelTables,
+  type CatalogEntry,
+} from '@utils/endpointModelTables';
 
 interface ModelData {
   id: string;
@@ -36,6 +41,10 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/models';
 const LOCAL_MODELS_URL = 'models.json';
 const CACHE_KEY = 'openrouter_models_cache';
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+// A fetch that never settles would wedge the re-runnable loader's `inFlight`
+// promise forever (every later reload becomes a silent no-op), so both
+// requests below are bounded the same way the endpoint probe is.
+const FETCH_TIMEOUT_MS = 8000;
 
 async function fetchModelsJson(): Promise<ModelsJson> {
   const cached = localStorage.getItem(CACHE_KEY);
@@ -45,7 +54,9 @@ async function fetchModelsJson(): Promise<ModelsJson> {
   }
 
   try {
-    const response = await fetch(OPENROUTER_API_URL);
+    const response = await fetch(OPENROUTER_API_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const data: ModelsJson = await response.json();
     localStorage.setItem(
@@ -57,7 +68,9 @@ async function fetchModelsJson(): Promise<ModelsJson> {
     // Fallback to the bundled snapshot. Guard against the dev/PWA case where a
     // missing file resolves to index.html (200 OK, text/html) — parsing that as
     // JSON would throw an opaque SyntaxError and leave the model list hung.
-    const response = await fetch(LOCAL_MODELS_URL);
+    const response = await fetch(LOCAL_MODELS_URL, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     const contentType = response.headers.get('content-type') ?? '';
     if (!response.ok || !contentType.includes('json')) {
       throw new Error(
@@ -76,6 +89,37 @@ export const loadModels = async (): Promise<{
   modelStreamSupport: { [key: string]: boolean };
   modelDisplayNames: { [key: string]: string };
 }> => {
+  // When a *custom* endpoint can tell us what it serves, that list is the
+  // truth — a local Ollama has nothing to do with the hosted catalog. The
+  // app's own hosted defaults are never probed (fetchEndpointModels returns []
+  // for them) so OpenAI and Anthropic keep the curated catalog below. The
+  // catalog is still loaded either way, as the metadata source for ids it
+  // knows. One snapshot of the store: reading apiEndpoint/customModels
+  // separately across the awaits below could pull them from different states.
+  // This also avoids naming a `customModels` binding here, which would collide
+  // with the fallback path's own `const customModels` declaration further down.
+  const state = useStore.getState();
+  const endpointIds = await fetchEndpointModels({
+    endpoint: state.apiEndpoint,
+    apiType: state.apiType ?? 'openai',
+    apiVersion: state.apiVersion || undefined,
+  });
+
+  if (endpointIds.length > 0) {
+    let catalog: CatalogEntry[] = [];
+    try {
+      catalog = (await fetchModelsJson()).data as unknown as CatalogEntry[];
+    } catch {
+      // No catalog means no metadata for known ids; the defaults still apply.
+    }
+    return buildEndpointModelTables({
+      ids: endpointIds,
+      customModels: state.customModels,
+      catalog,
+      customLabel: i18next.t('customModels.customLabel', { ns: 'model' }),
+    });
+  }
+
   const modelsJson = await fetchModelsJson();
 
   const modelOptions: string[] = [];

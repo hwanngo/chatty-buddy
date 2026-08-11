@@ -40,7 +40,10 @@
       "axios": ">=1.16.0",
       "shell-quote": ">=1.8.4",
       "tmp": ">=0.2.6",
-      "brace-expansion@>=5.0.0 <5.0.6": ">=5.0.6"
+      "brace-expansion@>=2.0.0 <2.1.4": ">=2.1.4 <3",
+      "brace-expansion@>=3.0.0 <5.0.7": ">=5.0.7",
+      "fast-uri@<3.1.5": "^3.1.5",
+      "postcss@<8.5.18": ">=8.5.18"
     }
   },
   "devDependencies": {
@@ -52,7 +55,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-scroll-to-bottom": "^4.2.5",
     "@vitejs/plugin-react-swc": "^4.3.0",
-    "postcss": "^8.5.10",
+    "postcss": "^8.5.26",
     "tailwindcss": "4",
     "typescript": "^6.0.3",
     "vite": "^8.0.16",
