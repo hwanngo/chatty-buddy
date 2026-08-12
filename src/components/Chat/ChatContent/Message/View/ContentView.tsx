@@ -33,7 +33,7 @@ import MarkdownModeButton from './Button/MarkdownModeButton';
 
 import CodeBlock from '../CodeBlock';
 import Dialog from '@components/Dialog';
-import { preprocessLaTeX } from '@utils/chat';
+import { preprocessLaTeX } from '@utils/latex';
 import { sanitizeImageUrl } from '@utils/url';
 import { splitThinking } from '@utils/thinking';
 

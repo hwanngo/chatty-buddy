@@ -5,8 +5,9 @@ type PersistedState = ReturnType<typeof createPartializedState>;
 
 // Zustand persist migrate hook.
 //
-// We have no field transforms yet (schema is v1), so this is a passthrough:
-// returning the persisted state tells persist "this data is current", which
+// Transforms are applied in order, each guarded by the version it upgrades
+// from, so a user arriving from any older schema picks up every step in turn.
+// Returning the persisted state tells persist "this data is current", which
 // PRESERVES the user's chats/settings across version bumps. Without a migrate
 // function, persist discards any state whose stored version differs from the
 // current one and logs "couldn't be migrated since no migrate function was
@@ -30,6 +31,19 @@ export const migrate = (
   if (state && version < 2 && state.autoModel === undefined) {
     const cfg = state.defaultChatConfig as { model?: string } | undefined;
     state.autoModel = cfg?.model === 'gpt-5.4';
+  }
+
+  // v2 -> v3: turn `inlineLatex` on. It defaulted to off because single-dollar
+  // math used to swallow prices — "costs $5 and shipping is $10" rendered as
+  // mangled italics — which meant every `$O(n)$` in an answer showed up as raw
+  // text instead. `preprocessLaTeX` now escapes currency-looking dollars
+  // (see `@utils/latex`), so the reason to keep it off is gone.
+  //
+  // This overrides an explicitly-off setting, which is the deliberate call:
+  // the old value encoded "avoid the currency bug", not "never render math".
+  // The toggle stays in Settings for anyone who genuinely wants math off.
+  if (state && version < 3) {
+    state.inlineLatex = true;
   }
 
   return state as PersistedState;

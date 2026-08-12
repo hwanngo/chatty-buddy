@@ -264,6 +264,12 @@ const useSubmit = () => {
           const reader = stream.getReader();
           let reading = true;
           let partial = '';
+          // Whether we're inside a synthetic `<think>` block. Providers that
+          // stream reasoning in its own delta field get it folded into the
+          // message content as `<think>…</think>`, which is exactly what local
+          // runtimes emit natively — so reasoning has one representation
+          // regardless of provider, and `splitThinking` renders both.
+          let reasoningOpen = false;
 
           while (reading && useStore.getState().generating) {
             const { done, value } = await reader.read();
@@ -344,8 +350,28 @@ const useSubmit = () => {
                   }
                   if (!curr.choices || !curr.choices[0] || !curr.choices[0].delta)
                     continue;
-                  const content = curr.choices[0]?.delta?.content ?? null;
-                  if (content) resultString += content;
+                  const delta = curr.choices[0].delta;
+
+                  // Reasoning arrives before the answer. Open a `<think>`
+                  // block on the first reasoning delta and close it as soon as
+                  // real content starts, so the two never run together.
+                  const reasoning = delta.reasoning ?? delta.reasoning_content;
+                  if (reasoning) {
+                    if (!reasoningOpen) {
+                      resultString += '<think>';
+                      reasoningOpen = true;
+                    }
+                    resultString += reasoning;
+                  }
+
+                  const content = delta.content ?? null;
+                  if (content) {
+                    if (reasoningOpen) {
+                      resultString += '</think>';
+                      reasoningOpen = false;
+                    }
+                    resultString += content;
+                  }
                 }
               }
 
@@ -363,6 +389,23 @@ const useSubmit = () => {
                 setChats(updatedChats);
               }
             }
+          }
+
+          // The stream can end mid-thought: the user stopped it, the model
+          // reasoned until it hit a limit, or it simply never produced an
+          // answer. Close the block so the stored message stays well-formed
+          // instead of carrying a dangling `<think>`.
+          if (reasoningOpen) {
+            const updatedChats: ChatInterface[] = JSON.parse(
+              JSON.stringify(useStore.getState().chats)
+            );
+            const updatedMessages = updatedChats[currentChatIndex].messages;
+            (
+              updatedMessages[updatedMessages.length - 1]
+                .content[0] as TextContentInterface
+            ).text += '</think>';
+            setChats(updatedChats);
+            reasoningOpen = false;
           }
 
           if (useStore.getState().generating) {

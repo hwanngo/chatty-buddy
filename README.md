@@ -45,7 +45,8 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 - **Dual API protocol** — Switch between OpenAI-compatible and Anthropic Messages API format; supports Anthropic, Kimi, MiniMax, GLM, and any provider implementing either protocol
 - **Streaming responses** — Real-time token streaming for a fluid conversation experience
 - **Live activity indicator** — While a response is in flight but hasn't produced text yet, an animated pixel-grid loader shows what's happening plus a running elapsed timer, so a slow model is visibly *slow* rather than indistinguishable from *stuck*
-- **Reasoning traces** — Thinking models (DeepSeek-R1, Qwen 3, and similar) that emit `<think>…</think>` inline get their reasoning split into a collapsible block instead of dumping raw tags into the answer. Expanded while the model thinks, collapsed once the answer lands; the message is stored verbatim, so editing and export are unaffected
+- **Reasoning traces** — Thinking models get their reasoning shown in a collapsible block instead of dumped into the answer, whether it arrives inline as `<think>…</think>` (local runtimes: llama.cpp, MLX, ollama) or in a separate stream field (`delta.reasoning` on OpenRouter, `delta.reasoning_content` on DeepSeek and Qwen via vLLM). Expanded while the model thinks, collapsed once the answer lands
+- **LaTeX math** — Inline `$O(\log n)$`, block `$$…$$`, and `\(…\)` / `\[…\]` all render via KaTeX, with dollar signs that are plainly currency ("costs $5 and shipping is $10") left alone rather than parsed as equations
 - **Rich message content** — Support for text and images in conversations
 - **Markdown rendering** — Full GitHub-flavored Markdown with syntax highlighting, tables, and LaTeX math
 - **Code blocks** — Syntax highlighting for 30+ programming languages with copy-to-clipboard
@@ -328,6 +329,7 @@ chatty-buddy/
     │   ├── api.ts            # API helpers (Azure detection, etc.)
     │   ├── modelReader.ts    # Model catalog parser
     │   ├── thinking.ts       # Splits inline <think> reasoning out for display
+    │   ├── latex.ts         # LaTeX delimiter normalising + currency-safe $ handling
     │   └── ...               # Other utilities
     │
     └── assets/
@@ -349,7 +351,7 @@ StoreState = ChatSlice + InputSlice + AuthSlice + ConfigSlice +
 
 Each slice owns a domain of state and its corresponding actions. The store is composed in `src/store/store.ts`.
 
-**Persistence**: The store is automatically persisted to `localStorage` under the key `chatty-buddy`. A `partialize` function (`createPartializedState`) controls exactly which fields are saved. The current schema version is **2**.
+**Persistence**: The store is automatically persisted to `localStorage` under the key `chatty-buddy`. A `partialize` function (`createPartializedState`) controls exactly which fields are saved. The current schema version is **3**.
 
 **Runtime-only state**: `createPartializedState` is an allowlist, so any field it omits is deliberately *not* persisted and therefore needs no migration. Request-scoped flags such as `generating` and `generatingStartedAt` live here — restoring them from a previous session would leave the UI claiming a request is in flight when none is.
 

@@ -5,7 +5,7 @@ import {
   MessageInterface,
   TextContentInterface,
 } from '@type/chat';
-import { isAzureEndpoint } from '@utils/api';
+import { isAzureEndpoint, supportsOpenAIHostedTools } from '@utils/api';
 import { assertSafeApiEndpoint } from '@utils/url';
 import { ModelOptions } from '@utils/modelReader';
 
@@ -158,7 +158,13 @@ export const getChatCompletion = async (
       messages,
       ...apiConfig,
       max_tokens: undefined,
-      ...(webSearch ? { tools: [{ type: 'web_search_preview' }] } : {}),
+      // Only OpenAI can run its own hosted tools. Advertising one to a
+      // gateway that can't invoke it (ollama et al) can leave the model
+      // reasoning toward a tool that never resolves — see
+      // `supportsOpenAIHostedTools`.
+      ...(webSearch && supportsOpenAIHostedTools(endpoint)
+        ? { tools: [{ type: 'web_search_preview' }] }
+        : {}),
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });
@@ -218,7 +224,13 @@ export const getChatCompletionStream = async (
       ...apiConfig,
       max_tokens: undefined,
       stream: true,
-      ...(webSearch ? { tools: [{ type: 'web_search_preview' }] } : {}),
+      // Only OpenAI can run its own hosted tools. Advertising one to a
+      // gateway that can't invoke it (ollama et al) can leave the model
+      // reasoning toward a tool that never resolves — see
+      // `supportsOpenAIHostedTools`.
+      ...(webSearch && supportsOpenAIHostedTools(endpoint)
+        ? { tools: [{ type: 'web_search_preview' }] }
+        : {}),
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });

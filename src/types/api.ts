@@ -12,6 +12,15 @@ export interface EventSourceDataChoices {
   delta: {
     content?: string;
     role?: string;
+    /**
+     * Reasoning streamed in a field of its own rather than inline in
+     * `content`. Two spellings are in circulation for the same thing:
+     * `reasoning` (OpenRouter) and `reasoning_content` (DeepSeek, and Qwen
+     * served via vLLM). Local runtimes generally don't use either — they emit
+     * `<think>` tags inside `content` instead.
+     */
+    reasoning?: string;
+    reasoning_content?: string;
   };
   finish_reason?: string;
   index: number;

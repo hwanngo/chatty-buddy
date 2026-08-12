@@ -69,7 +69,7 @@ const useStore = create<StoreState>()(
     {
       name: 'chatty-buddy',
       partialize: (state) => createPartializedState(state),
-      version: 2,
+      version: 3,
       migrate,
     }
   )
