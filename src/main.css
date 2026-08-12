@@ -21,6 +21,75 @@
   }
 }
 
+/* ── Agent-activity motion primitives ────────────────────────────────────
+   Ported from beautifului.dev's Loading State / Streaming Text primitives.
+   Timings and stagger are theirs; every color is resolved from our own
+   tokens at the call site, so these stay palette-neutral. */
+
+/* One cell of the 3x3 pixel-grid loader. Cells share this animation and are
+   separated only by animation-delay, which is what produces the drifting
+   "churn" instead of a uniform blink. */
+@keyframes pixel-on {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.15;
+  }
+}
+
+/* Sweeps a highlight band across a background-clipped text gradient. Travels
+   right-to-left (150% -> -50%) so it reads as "work moving through". */
+@keyframes shimmer-text {
+  0% {
+    background-position: 150% center;
+  }
+  100% {
+    background-position: -50% center;
+  }
+}
+
+/* Hard on/off caret. Distinct from Tailwind's `animate-pulse`, which eases
+   and never reaches zero — a terminal caret should snap. */
+@keyframes caret-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* Motion here is decorative status, not spatial continuity: with reduced
+   motion the loader still has to read as "busy", so cells settle at a legible
+   mid opacity and the shimmer/caret simply hold. */
+@media (prefers-reduced-motion: reduce) {
+  /* `!important` throughout: these properties are set as inline styles on the
+     elements (the stagger delay has to be per-cell), and a normal stylesheet
+     declaration loses to inline. An important author declaration does not. */
+  .pixel-grid-cell,
+  .shimmer-text,
+  .stream-caret {
+    animation: none !important;
+  }
+  .pixel-grid-cell {
+    opacity: 0.55 !important;
+  }
+  /* Drop the clipped gradient entirely and paint the glyphs solid — a frozen
+     shimmer would otherwise leave the word half-faded and hard to read. */
+  .shimmer-text {
+    background-image: none !important;
+    -webkit-text-fill-color: var(--fg-2) !important;
+    color: var(--fg-2) !important;
+  }
+}
+
 @theme {
   --font-sans:
     'DM Sans', ui-sans-serif, system-ui, -apple-system, Arial, sans-serif;

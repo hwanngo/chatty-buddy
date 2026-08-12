@@ -3,6 +3,7 @@
   "generate": "Generate",
   "stopGenerating": "Stop generating",
   "stop": "Stop",
+  "thinking": "Thinking",
   "cancel": "Cancel",
   "confirm": "Confirm",
   "warning": "Warning",

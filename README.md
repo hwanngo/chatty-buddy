@@ -5,7 +5,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 [![Zustand](https://img.shields.io/badge/Zustand-5.0-FF9900)](https://github.com/pmndrs/zustand)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -44,6 +44,7 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 - **Multi-model support** — Chat with hundreds of AI models via OpenRouter, OpenAI, Azure OpenAI, or any custom OpenAI-compatible or Anthropic-compatible endpoint
 - **Dual API protocol** — Switch between OpenAI-compatible and Anthropic Messages API format; supports Anthropic, Kimi, MiniMax, GLM, and any provider implementing either protocol
 - **Streaming responses** — Real-time token streaming for a fluid conversation experience
+- **Live activity indicator** — While a response is in flight but hasn't produced text yet, an animated pixel-grid loader shows what's happening plus a running elapsed timer, so a slow model is visibly *slow* rather than indistinguishable from *stuck*
 - **Rich message content** — Support for text and images in conversations
 - **Markdown rendering** — Full GitHub-flavored Markdown with syntax highlighting, tables, and LaTeX math
 - **Code blocks** — Syntax highlighting for 30+ programming languages with copy-to-clipboard
@@ -93,7 +94,7 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 | **Framework** | React 19 (Functional Components + Hooks) |
 | **Language** | TypeScript 6.0 (Strict mode) |
 | **Build Tool** | Vite 8 with SWC for fast compilation |
-| **Styling** | Tailwind CSS 3.4 + Custom design tokens |
+| **Styling** | Tailwind CSS 4 (CSS-first config) + custom design tokens in `src/main.css` |
 | **Typography** | `@tailwindcss/typography` plugin |
 | **State** | Zustand 5 with persist middleware |
 | **Markdown** | `react-markdown` + `remark-gfm` + `rehype-highlight` + `rehype-katex` |
@@ -253,7 +254,6 @@ chatty-buddy/
 ├── .env                      # Local environment variables (gitignored)
 ├── index.html                # HTML entry point
 ├── package.json              # Dependencies & scripts
-├── tailwind.config.cjs       # Tailwind CSS configuration
 ├── tsconfig.json             # TypeScript configuration
 ├── vite.config.ts            # Vite build configuration (incl. PWA plugin)
 │
@@ -276,6 +276,7 @@ chatty-buddy/
     │
     ├── components/           # React components
     │   ├── AboutMenu/        # About dialog
+    │   ├── AgentActivity/    # In-flight indicators (pixel-grid loader + elapsed timer)
     │   ├── ApiMenu/          # API configuration panel
     │   ├── ApiPopup/         # API key popup
     │   ├── Chat/             # Main chat interface
@@ -346,9 +347,11 @@ StoreState = ChatSlice + InputSlice + AuthSlice + ConfigSlice +
 
 Each slice owns a domain of state and its corresponding actions. The store is composed in `src/store/store.ts`.
 
-**Persistence**: The store is automatically persisted to `localStorage` under the key `chatty-buddy`. A `partialize` function controls exactly which fields are saved. The current schema version is **1**.
+**Persistence**: The store is automatically persisted to `localStorage` under the key `chatty-buddy`. A `partialize` function (`createPartializedState`) controls exactly which fields are saved. The current schema version is **2**.
 
-**Migration Strategy**: When the schema changes, a migration function must be added to `src/store/migrate.ts`, and the version in `store.ts` must be incremented. The migration pipeline runs automatically on app launch.
+**Runtime-only state**: `createPartializedState` is an allowlist, so any field it omits is deliberately *not* persisted and therefore needs no migration. Request-scoped flags such as `generating` and `generatingStartedAt` live here — restoring them from a previous session would leave the UI claiming a request is in flight when none is.
+
+**Migration Strategy**: When the *persisted* schema changes, a migration function must be added to `src/store/migrate.ts`, and the version in `store.ts` must be incremented. The migration pipeline runs automatically on app launch.
 
 ### API Layer
 
@@ -504,7 +507,8 @@ We welcome contributions! Please follow these guidelines:
 ### Code Style
 - **TypeScript strict mode** is enforced — no `any` types without justification
 - **Functional components** with hooks preferred
-- **Tailwind CSS** for all styling; avoid inline styles
+- **Tailwind CSS** for all styling; avoid inline styles. The one sanctioned exception is a value that genuinely varies per element and cannot be a static class — e.g. the per-cell `animation-delay` in `AgentActivity/PixelGridLoader`. Note that inline styles outrank stylesheet rules, so anything meant to override them (a `prefers-reduced-motion` block, for instance) needs `!important`
+- **Color via design tokens** — reference `var(--fg)`, `var(--bg-card)` etc. rather than raw hex or Tailwind palette colors, so light/dark both work without `dark:` variants
 - **Path aliases** must be used for all imports (e.g., `@components/`, `@store/`)
 
 ### Commit Messages

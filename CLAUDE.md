@@ -16,7 +16,9 @@ No test suite is configured.
 
 **Stack**: React 19 + TypeScript 6 + Vite 8 + Zustand 5 + Tailwind CSS. Runs as a web app (GitHub Pages/Vercel) and is installable as a PWA (`vite-plugin-pwa`, service worker registered in `src/main.tsx`).
 
-**State management**: Single Zustand store (`src/store/store.ts`) composed of slices — `chat-slice`, `input-slice`, `auth-slice`, `config-slice`, `prompt-slice`, `toast-slice`, `custom-models-slice`, `cloud-auth-slice`. State is persisted to `localStorage` under the key `chatty-buddy` with a schema version (currently v1). Schema migrations live in `src/store/migrate.ts` — every schema change requires a new migration step. The `auth-slice` holds `apiType: 'openai' | 'anthropic'` (persisted) alongside `apiKey`, `apiEndpoint`, and `apiVersion`.
+**State management**: Single Zustand store (`src/store/store.ts`) composed of slices — `chat-slice`, `input-slice`, `auth-slice`, `config-slice`, `prompt-slice`, `toast-slice`, `custom-models-slice`, `cloud-auth-slice`. State is persisted to `localStorage` under the key `chatty-buddy` with a schema version (currently v2, set in `store.ts`). Schema migrations live in `src/store/migrate.ts` — every schema change requires a new migration step. The `auth-slice` holds `apiType: 'openai' | 'anthropic'` (persisted) alongside `apiKey`, `apiEndpoint`, and `apiVersion`.
+
+Not all store state is persisted. `createPartializedState` in `store.ts` is the allowlist: anything absent from it is runtime-only and needs **no** migration when added or changed. `generating` and `generatingStartedAt` are the current examples — request-scoped flags that would be meaningless (or actively wrong) if restored from a previous session.
 
 **Path aliases** (defined in `vite.config.ts` and `tsconfig.json`):
 - `@components/` → `src/components/`
@@ -38,6 +40,14 @@ No test suite is configured.
 **i18n**: `react-i18next` with locale files in `public/locales/<lang>/`. Supported locales: `en-US` (English) and `vi-VN` (Vietnamese). Namespaces: `main`, `model`, `api`, `about`, `import`, `migration`, `drive` (drive loaded only when `VITE_GOOGLE_CLIENT_ID` is set). The `api` namespace includes `apiType.*` keys for the API format selector.
 
 **Constants**: `src/constants/auth.ts` exports `officialAPIEndpoint` (OpenAI), `defaultAPIEndpoint` (env-overridable), `anthropicAPIEndpoint` (`https://api.anthropic.com/v1/messages`), and `availableEndpoints` (preset OpenAI dropdown options).
+
+**Styling & design tokens**: All color lives in CSS custom properties defined once in `src/main.css` — light values on `:root`, dark values on `.dark`. Components reference them as `bg-[var(--bg-card)]`, `text-[var(--fg-2)]` and so on, so **no `dark:` pairing is needed for color** and the whole app rethemes from one block. Prefer an existing token over a new one; add raw hex to a component only if no token fits (and then consider adding the token instead). Shape and elevation are tokenized too: `--radius-btn|field|card`, `--shadow-whisper|ring|float`.
+
+**Agent-activity primitives** (`src/components/AgentActivity/`): UI for the window where a request is in flight. `PixelGridLoader` renders the 3×3 pixel-grid loader, a shimmering label, and a live elapsed timer; it is shown by `ContentView` when `generating` is true and the streamed message is still empty, then yields to the streaming text plus a blinking caret. Structure and timing are ported from [beautifului.dev](https://www.beautifului.dev/); every color is resolved from the tokens above, so the port is palette-neutral by construction.
+
+The shared keyframes — `pixel-on`, `shimmer-text`, `caret-blink` — live near the top of `src/main.css`. Two things to know before editing them:
+- The per-cell stagger must be an **inline** `animation` (each cell differs only by delay), so anything that needs to override it — the `prefers-reduced-motion` block in particular — requires `!important` to beat the inline declaration.
+- The loader's `role="status"`/`aria-live` region must announce the *label* only. The elapsed timer is `aria-hidden` on purpose: it changes ten times a second, and letting it into the live region turns a screen reader into a stopwatch.
 
 **PWA**: `vite-plugin-pwa` (Workbox) generates the service worker and `manifest.webmanifest`. The SW is registered in `src/main.tsx` via `registerSW` from `virtual:pwa-register` (`registerType: 'autoUpdate'`). The web build uses an absolute `base` (`/chatty-buddy/` on GitHub Pages, `/` otherwise) because a service worker requires it. `workbox-window` is a direct devDependency (pnpm strict-resolution requirement).
 

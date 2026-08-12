@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import useStore from '@store/store';
 
 import Icon from '@components/Icon';
+import { PixelGridLoader } from '@components/AgentActivity';
 
 import useSubmit from '@hooks/useSubmit';
 
@@ -62,6 +63,7 @@ const ContentView = memo(
     const inlineLatex = useStore((state) => state.inlineLatex);
     const markdownMode = useStore((state) => state.markdownMode);
     const generating = useStore((state) => state.generating);
+    const generatingStartedAt = useStore((state) => state.generatingStartedAt);
 
     // The last assistant message is the one currently being streamed.
     const isStreamingHere =
@@ -123,6 +125,18 @@ const ContentView = memo(
     const validImageContents = Array.isArray(content)
       ? (content.slice(1).filter(isImageContent) as ImageContentInterface[])
       : [];
+    // Before the first token lands there is nothing to render and the message
+    // would be an empty block. Show the activity indicator instead, so the
+    // wait is legibly a wait — and, via its timer, a measurable one.
+    if (isStreamingHere && currentTextContent.length === 0) {
+      return (
+        <PixelGridLoader
+          startedAt={generatingStartedAt ?? Date.now()}
+          className='py-1'
+        />
+      );
+    }
+
     return (
       <>
         <div
@@ -167,7 +181,8 @@ const ContentView = memo(
           )}
           {isStreamingHere && (
             <span
-              className='ml-0.5 inline-block h-4 w-[3px] translate-y-0.5 animate-pulse rounded-sm bg-[var(--fg-2)] align-baseline'
+              className='stream-caret ml-0.5 inline-block h-4 w-[3px] translate-y-0.5 rounded-sm bg-[var(--fg-2)] align-baseline'
+              style={{ animation: 'caret-blink 1s step-end infinite' }}
               aria-hidden='true'
             />
           )}

@@ -5,6 +5,13 @@ export interface ChatSlice {
   chats?: ChatInterface[];
   currentChatIndex: number;
   generating: boolean;
+  /**
+   * When the in-flight request started, for the activity indicator's elapsed
+   * timer. Runtime-only (like `generating`) — deliberately excluded from
+   * `createPartializedState`, so it needs no schema migration and a reload
+   * mid-request never resurrects a stale clock.
+   */
+  generatingStartedAt: number | null;
   error: string;
   folders: FolderCollection;
   setChats: (chats: ChatInterface[]) => void;
@@ -18,6 +25,7 @@ export const createChatSlice: StoreSlice<ChatSlice> = (set, get) => {
   return {
     currentChatIndex: -1,
     generating: false,
+    generatingStartedAt: null,
     error: '',
     folders: {},
     setChats: (chats: ChatInterface[]) => {
@@ -42,6 +50,15 @@ export const createChatSlice: StoreSlice<ChatSlice> = (set, get) => {
       set((prev: ChatSlice) => ({
         ...prev,
         generating: generating,
+        // Stamp the clock on the false -> true edge only. Callers set this
+        // flag more than once per request (retries, regenerate), and
+        // re-stamping on a repeat `true` would reset a timer that is meant to
+        // measure the whole wait.
+        generatingStartedAt: generating
+          ? prev.generating
+            ? prev.generatingStartedAt
+            : Date.now()
+          : null,
       }));
     },
     setError: (error: string) => {
