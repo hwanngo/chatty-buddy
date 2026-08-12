@@ -676,6 +676,8 @@ const InputToolbar = ({
   );
   const webSearch = chat?.config.webSearch ?? false;
   const fetchUrl = chat?.config.fetchUrl ?? false;
+  const think = chat?.config.think ?? true;
+  const apiType = useStore((state) => state.apiType);
   const reasoningEffort = chat?.config.reasoningEffort ?? null;
   const imageDetail = chat?.imageDetail ?? 'auto';
 
@@ -753,6 +755,7 @@ const InputToolbar = ({
   const activeToolCount =
     (webSearch ? 1 : 0) +
     (fetchUrl ? 1 : 0) +
+    (apiType === 'ollama' && !think ? 1 : 0) +
     (reasoningEffort ? 1 : 0) +
     (hasImages && imageDetail !== 'auto' ? 1 : 0);
 
@@ -782,6 +785,16 @@ const InputToolbar = ({
     );
     updatedChats[currentChatIndex].config.fetchUrl =
       !updatedChats[currentChatIndex].config.fetchUrl;
+    setChats(updatedChats);
+  };
+
+  const handleToggleThink = () => {
+    if (!useStore.getState().chats) return;
+    const updatedChats: ChatInterface[] = JSON.parse(
+      JSON.stringify(useStore.getState().chats)
+    );
+    updatedChats[currentChatIndex].config.think =
+      !(updatedChats[currentChatIndex].config.think ?? true);
     setChats(updatedChats);
   };
 
@@ -909,6 +922,33 @@ const InputToolbar = ({
                   />
                 </span>
               </button>
+
+              {/* Thinking — ollama only: the OpenAI-compatible endpoint has
+                  no way to switch reasoning off, so showing the control there
+                  would promise something it cannot deliver. */}
+              {apiType === 'ollama' && (
+                <button
+                  type='button'
+                  onClick={handleToggleThink}
+                  className='w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] text-[var(--fg)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer'
+                >
+                  <span className='flex items-center gap-2'>
+                    <Icon name='sparkle' className='w-4 h-4' />
+                    {t('think.label')}
+                  </span>
+                  <span
+                    className={`relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full transition-colors ${
+                      think ? 'bg-[var(--accent)]' : 'bg-[var(--border-mid)]'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-transform ${
+                        think ? 'translate-x-[16px]' : 'translate-x-[2px]'
+                      }`}
+                    />
+                  </span>
+                </button>
+              )}
 
               {/* Reasoning — cycles None → Low → Medium → High */}
               <button

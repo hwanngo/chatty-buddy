@@ -66,6 +66,10 @@
     "label": "Tải nội dung URL",
     "description": "Cho phép mô hình đọc các trang web bạn gửi. URL sẽ được gửi tới dịch vụ r.jina.ai để lấy nội dung."
   },
+  "think": {
+    "label": "Suy luận",
+    "description": "Cho phép mô hình suy luận trước khi trả lời. Tắt sẽ nhanh hơn nhiều; chỉ áp dụng cho ollama."
+  },
   "searchModels": "Tìm kiếm model…",
   "reasoningEffort": {
     "label": "Suy luận",

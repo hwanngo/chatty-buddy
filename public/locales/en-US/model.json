@@ -66,6 +66,10 @@
     "label": "Fetch URLs",
     "description": "Let the model read web pages you link. Page URLs are sent to the r.jina.ai reader service to be fetched."
   },
+  "think": {
+    "label": "Thinking",
+    "description": "Let the model reason before answering. Off is much faster; ollama only."
+  },
   "searchModels": "Search models…",
   "reasoningEffort": {
     "label": "Reasoning",

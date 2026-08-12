@@ -22,7 +22,9 @@
   "apiType": {
     "inputLabel": "Định dạng API",
     "openai": "Tương thích OpenAI",
-    "anthropic": "Tương thích Anthropic"
+    "anthropic": "Tương thích Anthropic",
+    "ollama": "Ollama (gốc)",
+    "ollamaHint": "Dùng /api/chat của ollama thay vì endpoint tương thích OpenAI. Cần thiết để tắt suy luận — endpoint tương thích bỏ qua tuỳ chọn này. Dán URL máy chủ, ví dụ http://localhost:11434"
   },
   "errors": {
     "toolRoundLimit": "Đã dừng sau {{count}} lượt gọi công cụ."

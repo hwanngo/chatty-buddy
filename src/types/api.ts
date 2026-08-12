@@ -69,3 +69,37 @@ export interface AnthropicStreamContentBlockDelta {
     text: string;
   };
 }
+
+// ─── Ollama native API types ──────────────────────────────────────────────────
+
+/**
+ * One line of an ollama `/api/chat` stream. The native protocol is
+ * newline-delimited JSON rather than SSE: no `data:` prefix, no `[DONE]`
+ * sentinel, and — unlike the OpenAI shim — tool calls arrive complete in a
+ * single object instead of as fragments to be reassembled by index.
+ */
+export interface OllamaStreamChunk {
+  model?: string;
+  created_at?: string;
+  message?: OllamaMessage;
+  done?: boolean;
+  error?: string;
+}
+
+export interface OllamaMessage {
+  role: string;
+  content?: string;
+  /** Reasoning, in its own field, when `think` is enabled. */
+  thinking?: string;
+  tool_calls?: OllamaToolCall[];
+}
+
+export interface OllamaToolCall {
+  id?: string;
+  function: {
+    index?: number;
+    name: string;
+    /** An object, not a JSON string — the reverse of the OpenAI shape. */
+    arguments: Record<string, unknown> | string;
+  };
+}

@@ -21,8 +21,14 @@ import {
   getChatCompletionStream,
   getAnthropicChatCompletion,
   getAnthropicChatCompletionStream,
+  getOllamaChatCompletion,
+  getOllamaChatCompletionStream,
 } from '@api/api';
-import { parseEventSource, parseAnthropicEventSource } from '@api/helper';
+import {
+  parseEventSource,
+  parseAnthropicEventSource,
+  parseOllamaStream,
+} from '@api/helper';
 import { limitMessageTokens, updateTotalTokenUsed } from '@utils/messageUtils';
 import { _defaultChatConfig } from '@constants/chat';
 import { officialAPIEndpoint } from '@constants/auth';
@@ -76,6 +82,27 @@ const useSubmit = () => {
           useStore.getState().apiKey || undefined
         );
         const titleText = data.content[0]?.text;
+        if (!titleText)
+          throw new Error(t('errors.failedToRetrieveData') as string);
+        return titleText;
+      }
+
+      // ── Ollama native path ────────────────────────────────────────────
+      if (apiType === 'ollama') {
+        const titleChatConfig = {
+          ...modelConfig,
+          model: useStore.getState().titleModel ?? modelConfig.model,
+          // A title is a one-liner; reasoning about it would cost more than
+          // the title is worth.
+          think: false,
+        };
+        const data = await getOllamaChatCompletion(
+          useStore.getState().apiEndpoint,
+          message,
+          titleChatConfig,
+          useStore.getState().apiKey || undefined
+        );
+        const titleText = data?.message?.content;
         if (!titleText)
           throw new Error(t('errors.failedToRetrieveData') as string);
         return titleText;
@@ -155,7 +182,7 @@ const useSubmit = () => {
       // Anthropic always supports streaming; unknown OpenAI models default to
       // streaming (a missing entry means "model not in our list", not "no stream").
       const isStreamSupported =
-        apiType === 'anthropic'
+        apiType === 'anthropic' || apiType === 'ollama'
           ? true
           : modelStreamSupport[chats[currentChatIndex].config.model] ?? true;
 
@@ -175,7 +202,24 @@ const useSubmit = () => {
 
       if (!isStreamSupported) {
         // ── Non-streaming branch ──────────────────────────────────────────
-        if (apiType === 'anthropic') {
+        if (apiType === 'ollama') {
+          // isStreamSupported is always true for ollama, so this is a safety
+          // fallback rather than a path the UI can normally reach.
+          data = await getOllamaChatCompletion(
+            useStore.getState().apiEndpoint,
+            messages,
+            chats[currentChatIndex].config,
+            apiKey || undefined,
+            signal
+          );
+          const text = data?.message?.content;
+          if (!text) throw new Error(t('errors.failedToRetrieveData') as string);
+          appendToLastMessage(
+            data.message.thinking
+              ? `<think>${data.message.thinking}</think>${text}`
+              : text
+          );
+        } else if (apiType === 'anthropic') {
           // isStreamSupported is always true for Anthropic, so this is a safety fallback
           data = await getAnthropicChatCompletion(
             useStore.getState().apiEndpoint,
@@ -258,6 +302,14 @@ const useSubmit = () => {
               apiKey || undefined,
               signal
             );
+          } else if (apiType === 'ollama') {
+            stream = await getOllamaChatCompletionStream(
+              useStore.getState().apiEndpoint,
+              roundMessages,
+              chats[currentChatIndex].config,
+              apiKey || undefined,
+              signal
+            );
           } else {
             // The official endpoint is the only one that *requires* a key;
             // local and self-hosted endpoints are commonly keyless.
@@ -299,7 +351,77 @@ const useSubmit = () => {
           while (reading && useStore.getState().generating) {
             const { done, value } = await reader.read();
 
-            if (apiType === 'anthropic') {
+            if (apiType === 'ollama') {
+              // ── Ollama native stream parsing ────────────────────────────
+              // Newline-delimited JSON: hold back a trailing partial line, and
+              // hand only whole lines to the parser.
+              const rawData = partial + new TextDecoder().decode(value);
+              let toProcess: string;
+              if (done) {
+                toProcess = rawData;
+                partial = '';
+              } else {
+                const lastBreak = rawData.lastIndexOf('\n');
+                if (lastBreak === -1) {
+                  partial = rawData;
+                  toProcess = '';
+                } else {
+                  toProcess = rawData.slice(0, lastBreak + 1);
+                  partial = rawData.slice(lastBreak + 1);
+                }
+              }
+
+              const { chunks, done: ollamaDone } = toProcess
+                ? parseOllamaStream(toProcess)
+                : { chunks: [], done: false };
+              if (done || ollamaDone) reading = false;
+
+              let resultString = '';
+              for (const chunk of chunks) {
+                const message = chunk.message;
+                if (!message) continue;
+
+                // Reasoning has its own field here. Fold it into the content
+                // as `<think>` so it takes the same path as every other
+                // provider and `splitThinking` renders it unchanged.
+                if (message.thinking) {
+                  if (!reasoningOpen) {
+                    resultString += '<think>';
+                    reasoningOpen = true;
+                  }
+                  resultString += message.thinking;
+                }
+                if (message.content) {
+                  if (reasoningOpen) {
+                    resultString += '</think>';
+                    reasoningOpen = false;
+                  }
+                  resultString += message.content;
+                }
+
+                // Tool calls arrive complete rather than as fragments. The
+                // arguments come as an object, so they're serialised here to
+                // match the internal shape and keep the executor
+                // protocol-agnostic.
+                for (const call of message.tool_calls ?? []) {
+                  toolCallAcc.push({
+                    id:
+                      call.id ??
+                      `call_${toolCallAcc.length}_${call.function.name}`,
+                    type: 'function',
+                    function: {
+                      name: call.function.name,
+                      arguments:
+                        typeof call.function.arguments === 'string'
+                          ? call.function.arguments
+                          : JSON.stringify(call.function.arguments ?? {}),
+                    },
+                  });
+                }
+              }
+
+              if (resultString) appendToLastMessage(resultString);
+            } else if (apiType === 'anthropic') {
               // ── Anthropic stream parsing ────────────────────────────────
               const rawData = partial + new TextDecoder().decode(value);
 

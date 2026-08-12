@@ -110,6 +110,17 @@ export interface ConfigInterface {
    * migration — a chat saved before this field existed simply has it absent.
    */
   fetchUrl?: boolean;
+  /**
+   * Whether a thinking model may reason before answering. Only reaches the
+   * model on the `ollama` protocol: its OpenAI-compatible shim ignores every
+   * known way of asking, so the native `/api/chat` `think` parameter is the
+   * only one that has any effect.
+   *
+   * Defaults to on, matching what a thinking model does unprompted, so
+   * switching protocol doesn't silently change how the model behaves. Turning
+   * it off trades the reasoning trace for a much faster first token.
+   */
+  think?: boolean;
 }
 
 export interface ChatHistoryInterface {

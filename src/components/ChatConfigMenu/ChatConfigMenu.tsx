@@ -73,6 +73,7 @@ const ChatConfigPopup = ({
     config.webSearch ?? false
   );
   const [_fetchUrl, _setFetchUrl] = useState<boolean>(config.fetchUrl ?? false);
+  const [_think, _setThink] = useState<boolean>(config.think ?? true);
   const [_reasoningEffort, _setReasoningEffort] =
     useState<ReasoningEffort | null>(config.reasoningEffort ?? null);
 
@@ -88,6 +89,7 @@ const ChatConfigPopup = ({
       frequency_penalty: _frequencyPenalty,
       webSearch: _webSearch,
       fetchUrl: _fetchUrl,
+      think: _think,
       reasoningEffort: _reasoningEffort,
     });
     setDefaultSystemMessage(_systemMessage);
@@ -107,6 +109,7 @@ const ChatConfigPopup = ({
     _setImageDetail(_defaultImageDetail);
     _setWebSearch(_defaultChatConfig.webSearch ?? false);
     _setFetchUrl(_defaultChatConfig.fetchUrl ?? false);
+    _setThink(_defaultChatConfig.think ?? true);
     _setReasoningEffort(_defaultChatConfig.reasoningEffort ?? null);
   };
 
@@ -203,6 +206,35 @@ const ChatConfigPopup = ({
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   _fetchUrl ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Thinking default */}
+        <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <label className='block text-sm font-medium text-[var(--fg)]'>
+                {t('think.label')}
+              </label>
+              <p className='mt-1 text-xs text-[var(--fg-3)]'>
+                {t('think.description')}
+              </p>
+            </div>
+            <button
+              type='button'
+              role='switch'
+              aria-checked={_think}
+              onClick={() => _setThink((v) => !v)}
+              className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
+                _think ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sand)]'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  _think ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

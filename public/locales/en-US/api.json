@@ -22,7 +22,9 @@
   "apiType": {
     "inputLabel": "API Format",
     "openai": "OpenAI Compatible",
-    "anthropic": "Anthropic Compatible"
+    "anthropic": "Anthropic Compatible",
+    "ollama": "Ollama (native)",
+    "ollamaHint": "Talks to ollama’s own /api/chat instead of its OpenAI-compatible endpoint. Required to turn thinking off — the compatible endpoint ignores it. Paste your server URL, e.g. http://localhost:11434"
   },
   "errors": {
     "toolRoundLimit": "Stopped after {{count}} tool rounds."

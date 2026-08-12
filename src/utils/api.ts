@@ -3,6 +3,29 @@ export const isAzureEndpoint = (endpoint: string) => {
 };
 
 /**
+ * Strips a known chat/list suffix off a configured endpoint to recover the
+ * server root.
+ *
+ * Users configure one URL, and the native ollama protocol needs siblings of it
+ * (`/api/chat` to talk, `/v1/models` to list). Rather than ask for a second
+ * endpoint, derive both from whatever they already pasted — commonly the
+ * OpenAI-compatible `…/v1/chat/completions`, sometimes the bare host.
+ */
+export const ollamaBaseUrl = (endpoint: string): string => {
+  const trimmed = endpoint.trim().replace(/\/+$/, '');
+  for (const suffix of ['/api/chat', '/v1/chat/completions', '/v1', '/api']) {
+    if (trimmed.toLowerCase().endsWith(suffix)) {
+      return trimmed.slice(0, -suffix.length);
+    }
+  }
+  return trimmed;
+};
+
+/** Native chat endpoint for an ollama server, from any configured form. */
+export const ollamaChatUrl = (endpoint: string): string =>
+  `${ollamaBaseUrl(endpoint)}/api/chat`;
+
+/**
  * Whether an endpoint is OpenAI's own API, and so might accept OpenAI-hosted
  * built-in tools (`web_search_preview` and friends).
  *

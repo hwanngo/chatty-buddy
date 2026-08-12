@@ -60,8 +60,15 @@ const ApiMenu = ({
   const handleApiTypeChange = (newType: ApiType) => {
     _setApiType(newType);
     _setCustomEndpoint(false);
+    // Ollama has no canonical public host — it is always someone's own
+    // machine — so start blank and let them paste it, rather than seeding a
+    // default that is wrong for everyone.
     _setApiEndpoint(
-      newType === 'anthropic' ? anthropicAPIEndpoint : defaultAPIEndpoint
+      newType === 'anthropic'
+        ? anthropicAPIEndpoint
+        : newType === 'ollama'
+          ? ''
+          : defaultAPIEndpoint
     );
   };
 
@@ -102,7 +109,9 @@ const ApiMenu = ({
           <label className='block text-sm font-medium text-[var(--fg)] mb-1.5'>
             {t('apiEndpoint.inputLabel', { ns: 'api' })}
           </label>
-          {_customEndpoint || _apiType === 'anthropic' ? (
+          {_customEndpoint ||
+          _apiType === 'anthropic' ||
+          _apiType === 'ollama' ? (
             <input
               type='text'
               className='w-full text-[var(--fg)] px-3 py-2 text-sm bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--focus)]'
@@ -225,6 +234,7 @@ const ApiTypeSelector = ({
   const options: { value: string; label: string }[] = [
     { value: 'openai', label: t('apiType.openai') },
     { value: 'anthropic', label: t('apiType.anthropic') },
+    { value: 'ollama', label: t('apiType.ollama') },
   ];
 
   return (

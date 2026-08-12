@@ -5,7 +5,11 @@ import {
   MessageInterface,
   TextContentInterface,
 } from '@type/chat';
-import { isAzureEndpoint, supportsOpenAIHostedTools } from '@utils/api';
+import {
+  isAzureEndpoint,
+  ollamaChatUrl,
+  supportsOpenAIHostedTools,
+} from '@utils/api';
 import { TOOL_DEFINITIONS } from '@utils/tools';
 import { assertSafeApiEndpoint } from '@utils/url';
 import { ModelOptions } from '@utils/modelReader';
@@ -399,5 +403,140 @@ export const getAnthropicChatCompletionStream = async (
     );
   }
 
+  return response.body;
+};
+
+// ─── Ollama native API ────────────────────────────────────────────────────────
+
+/**
+ * Converts the internal message array to ollama's native shape.
+ *
+ * Three differences from the OpenAI form:
+ * - `content` is a plain string, and images ride in a sibling `images` array
+ *   of bare base64 (no data-URI prefix) rather than inside the content parts.
+ * - a `tool` message identifies itself with `tool_name`, not `tool_call_id`.
+ * - `tool_calls` carry their arguments as an object.
+ */
+const toOllamaMessages = (messages: MessageInterface[]) =>
+  messages.map((message) => {
+    const text = message.content
+      .filter((block) => block.type === 'text')
+      .map((block) => (block as TextContentInterface).text)
+      .join('\n');
+
+    const images = message.content
+      .filter((block) => block.type === 'image_url')
+      .map((block) => {
+        const url = (block as ImageContentInterface).image_url.url;
+        // data:<media_type>;base64,<data> — ollama wants only the payload.
+        const comma = url.indexOf(',');
+        return url.startsWith('data:') && comma !== -1
+          ? url.slice(comma + 1)
+          : url;
+      });
+
+    return {
+      role: message.role,
+      content: text,
+      ...(images.length > 0 ? { images } : {}),
+      ...(message.tool_name ? { tool_name: message.tool_name } : {}),
+      ...(message.tool_calls
+        ? {
+            tool_calls: message.tool_calls.map((call) => ({
+              function: {
+                name: call.function.name,
+                arguments: (() => {
+                  try {
+                    return JSON.parse(call.function.arguments || '{}');
+                  } catch {
+                    return {};
+                  }
+                })(),
+              },
+            })),
+          }
+        : {}),
+    };
+  });
+
+/**
+ * Body shared by the streaming and non-streaming native calls.
+ *
+ * `think` is the reason this protocol exists at all: it is the only way found
+ * to suppress a thinking model's reasoning on this server — the
+ * OpenAI-compatible shim ignored every equivalent that was tried. Sent only
+ * when explicitly disabled, so a model with no thinking mode is unaffected.
+ */
+const buildOllamaBody = (
+  messages: MessageInterface[],
+  config: ConfigInterface,
+  stream: boolean
+) => {
+  const { webSearch, reasoningEffort, fetchUrl, think, model, ...rest } = config;
+  return {
+    model,
+    messages: toOllamaMessages(messages),
+    stream,
+    ...(think === false ? { think: false } : {}),
+    ...(fetchUrl ? { tools: TOOL_DEFINITIONS } : {}),
+    // Sampling parameters live under `options` natively, not at the top level.
+    options: {
+      temperature: rest.temperature,
+      top_p: rest.top_p,
+      frequency_penalty: rest.frequency_penalty,
+      presence_penalty: rest.presence_penalty,
+    },
+  };
+};
+
+export const getOllamaChatCompletion = async (
+  endpoint: string,
+  messages: MessageInterface[],
+  config: ConfigInterface,
+  apiKey?: string,
+  signal?: AbortSignal
+) => {
+  const url = ollamaChatUrl(endpoint);
+  assertSafeApiEndpoint(url);
+
+  const response = await safeFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    },
+    signal,
+    body: JSON.stringify(buildOllamaBody(messages, config, false)),
+  });
+  if (!response.ok)
+    throw new Error(
+      cleanErrorText(await response.text(), response.status, response.statusText)
+    );
+  return await response.json();
+};
+
+export const getOllamaChatCompletionStream = async (
+  endpoint: string,
+  messages: MessageInterface[],
+  config: ConfigInterface,
+  apiKey?: string,
+  signal?: AbortSignal
+) => {
+  const url = ollamaChatUrl(endpoint);
+  assertSafeApiEndpoint(url);
+
+  const response = await safeFetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+    },
+    signal,
+    body: JSON.stringify(buildOllamaBody(messages, config, true)),
+  });
+  if (!response.ok)
+    throw new Error(
+      cleanErrorText(await response.text(), response.status, response.statusText)
+    );
   return response.body;
 };

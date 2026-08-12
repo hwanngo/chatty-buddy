@@ -42,11 +42,12 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 
 ### Core Chat Experience
 - **Multi-model support** — Chat with hundreds of AI models via OpenRouter, OpenAI, Azure OpenAI, or any custom OpenAI-compatible or Anthropic-compatible endpoint
-- **Dual API protocol** — Switch between OpenAI-compatible and Anthropic Messages API format; supports Anthropic, Kimi, MiniMax, GLM, and any provider implementing either protocol
+- **Three API protocols** — OpenAI-compatible, Anthropic Messages, or ollama's native `/api/chat`; supports Anthropic, Kimi, MiniMax, GLM, ollama, and any provider implementing one of them
 - **Streaming responses** — Real-time token streaming for a fluid conversation experience
 - **Live activity indicator** — While a response is in flight but hasn't produced text yet, an animated pixel-grid loader shows what's happening plus a running elapsed timer, so a slow model is visibly *slow* rather than indistinguishable from *stuck*
 - **Reasoning traces** — Thinking models get their reasoning shown in a collapsible block instead of dumped into the answer, whether it arrives inline as `<think>…</think>` (local runtimes: llama.cpp, MLX, ollama) or in a separate stream field (`delta.reasoning` on OpenRouter, `delta.reasoning_content` on DeepSeek and Qwen via vLLM). Expanded while the model thinks, collapsed once the answer lands
 - **Fetch URLs (tool calling)** — Off by default. When on, the model can call a `fetch_url` tool to read a page you link; the app performs the fetch (via the `r.jina.ai` reader, since browsers can't fetch arbitrary sites) and hands the text back. Works against any OpenAI-compatible endpoint including local ones, and the result appears as an expandable chip in the transcript
+- **Thinking toggle (ollama)** — Turn a thinking model's reasoning off for much faster answers. Only possible on the native ollama protocol: its OpenAI-compatible endpoint ignores every way of asking, verified across six different parameters
 - **LaTeX math** — Inline `$O(\log n)$`, block `$$…$$`, and `\(…\)` / `\[…\]` all render via KaTeX, with dollar signs that are plainly currency ("costs $5 and shipping is $10") left alone rather than parsed as equations
 - **Rich message content** — Support for text and images in conversations
 - **Markdown rendering** — Full GitHub-flavored Markdown with syntax highlighting, tables, and LaTeX math

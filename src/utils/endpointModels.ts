@@ -1,8 +1,8 @@
 import { anthropicAPIEndpoint, officialAPIEndpoint } from '@constants/auth';
-import { isAzureEndpoint } from '@utils/api';
+import { isAzureEndpoint, ollamaBaseUrl } from '@utils/api';
 import { assertSafeApiEndpoint } from '@utils/url';
 
-export type EndpointApiType = 'openai' | 'anthropic';
+export type EndpointApiType = 'openai' | 'anthropic' | 'ollama';
 
 const AZURE_DEFAULT_API_VERSION = '2024-02-01';
 const REQUEST_TIMEOUT_MS = 8000;
@@ -54,6 +54,11 @@ export const deriveModelsUrl = (
     const version = apiVersion?.trim() || AZURE_DEFAULT_API_VERSION;
     return `${url.origin}/openai/models?api-version=${version}`;
   }
+
+  // Ollama's own `/api/tags` returns a different shape; its OpenAI-compatible
+  // `/v1/models` answers with the ids in the format the caller already parses,
+  // so reuse that rather than adding a second response format.
+  if (apiType === 'ollama') return `${ollamaBaseUrl(endpoint)}/v1/models`;
 
   const path = url.pathname.replace(/\/+$/, '');
   const suffix = apiType === 'anthropic' ? '/messages' : '/chat/completions';

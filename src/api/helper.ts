@@ -1,4 +1,10 @@
-import { AnthropicStreamContentBlockDelta, EventSourceData } from '@type/api';
+// Type-only: these are erased at build time, and writing it explicitly keeps
+// this module free of runtime imports so its parsers can be exercised alone.
+import type {
+  AnthropicStreamContentBlockDelta,
+  EventSourceData,
+  OllamaStreamChunk,
+} from '@type/api';
 
 export const parseEventSource = (
   data: string
@@ -85,6 +91,42 @@ export const parseAnthropicEventSource = (
       } catch {
         // ignore malformed JSON — stream continues
       }
+    }
+  }
+
+  return { chunks, done };
+};
+
+/**
+ * Parses a raw ollama `/api/chat` buffer into chunks and a done flag.
+ *
+ * The native protocol is newline-delimited JSON, which is simpler than SSE in
+ * every way that mattered for the OpenAI path: one complete object per line,
+ * no `data:` prefix, no `[DONE]` sentinel, and tool calls arriving whole
+ * rather than as fragments to reassemble.
+ *
+ * The caller is responsible for holding back a trailing partial line between
+ * reads; only whole lines should be passed in.
+ */
+export const parseOllamaStream = (
+  data: string
+): { chunks: OllamaStreamChunk[]; done: boolean } => {
+  const chunks: OllamaStreamChunk[] = [];
+  let done = false;
+
+  for (const line of data.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const parsed = JSON.parse(trimmed) as OllamaStreamChunk;
+      // The server reports failures in-band, mid-stream, with a 200 status.
+      if (parsed.error) throw new Error(parsed.error);
+      chunks.push(parsed);
+      if (parsed.done) done = true;
+    } catch (e) {
+      // A genuine server error must surface; malformed JSON is a torn line
+      // and is simply skipped, matching the SSE parsers above.
+      if (e instanceof Error && !(e instanceof SyntaxError)) throw e;
     }
   }
 

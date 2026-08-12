@@ -31,13 +31,25 @@ Not all store state is persisted. `createPartializedState` in `store.ts` is the 
 - `@icon/` → `src/assets/icons/`
 - `@src/` → `src/`
 
-**API layer**: `src/api/api.ts` handles both OpenAI-compatible and Anthropic-compatible requests. OpenAI functions: `getChatCompletion`, `getChatCompletionStream`. Anthropic functions: `getAnthropicChatCompletion`, `getAnthropicChatCompletionStream`, `convertMessagesForAnthropic` (extracts system prompt, converts image blocks to Anthropic format). `src/api/helper.ts` parses SSE streams for both protocols (`parseEventSource` for OpenAI, `parseAnthropicEventSource` for Anthropic). `src/api/google-api.ts` handles Google Drive sync.
+**API layer**: `src/api/api.ts` handles OpenAI-compatible, Anthropic-compatible and ollama-native requests. OpenAI functions: `getChatCompletion`, `getChatCompletionStream`. Anthropic functions: `getAnthropicChatCompletion`, `getAnthropicChatCompletionStream`, `convertMessagesForAnthropic` (extracts system prompt, converts image blocks to Anthropic format). `src/api/helper.ts` parses SSE streams for both protocols (`parseEventSource` for OpenAI, `parseAnthropicEventSource` for Anthropic). `src/api/google-api.ts` handles Google Drive sync.
 
 **Types**: `src/types/chat.ts` defines the core data model (`MessageInterface`, `ChatInterface`, `ConfigInterface`, `ContentInterface`, `ImageContentInterface`). Messages use a content array (not a plain string) to support mixed text/image content. `src/types/api.ts` contains Anthropic response types: `AnthropicMessage`, `AnthropicTextBlock`, `AnthropicStreamContentBlockDelta`.
 
 **Models**: Model metadata is sourced from `public/models.json` (OpenRouter format). To update models: download from `https://openrouter.ai/api/v1/models`, save as `models.json` in root, run `node sortModelsJsonKeys.js`, then move to `public/`.
 
 **i18n**: `react-i18next` with locale files in `public/locales/<lang>/`. Supported locales: `en-US` (English) and `vi-VN` (Vietnamese). Namespaces: `main`, `model`, `api`, `about`, `import`, `migration`, `drive` (drive loaded only when `VITE_GOOGLE_CLIENT_ID` is set). The `api` namespace includes `apiType.*` keys for the API format selector.
+
+**Ollama native protocol** (`apiType: 'ollama'`): targets ollama's own `/api/chat` instead of its OpenAI-compatible shim. The reason is concrete and measured — the shim silently drops unknown parameters, so `think`, `enable_thinking`, `chat_template_kwargs`, `reasoning_effort` and `options.think` all had **zero** effect on reasoning, while native `think: false` suppressed it completely. Anything beyond the OpenAI surface is unreachable through the shim, so this is the seam for every future ollama capability.
+
+What differs from the OpenAI path, all of it simpler:
+- **NDJSON, not SSE** — one complete JSON object per line, no `data:` prefix and no `[DONE]` sentinel. `parseOllamaStream` takes whole lines only; the caller holds back a trailing partial line.
+- **Tool calls arrive complete**, with `arguments` as an **object**. `useSubmit` serialises them to a JSON string when building `ToolCallInterface`, which keeps `executeToolCall` protocol-agnostic — nothing downstream knows which wire format produced a call.
+- **Reasoning is `message.thinking`**, folded into the content as `<think>…</think>` so it takes the same path as every other provider and `splitThinking` renders it unchanged.
+- **Messages convert** via `toOllamaMessages`: content flattens to a string, images ride in a sibling `images` array as bare base64, and a tool result identifies itself with `tool_name` rather than `tool_call_id`.
+- **Sampling lives under `options`**, not at the top level. `max_tokens` is deliberately not mapped to `num_predict` — the OpenAI path doesn't send it either (it's the context budget for `limitMessageTokens`, not an output cap).
+- One endpoint is configured and the rest are derived: `ollamaChatUrl` strips a known suffix to get the base, so a pasted `…/v1/chat/completions` still resolves to `/api/chat`, and the model list reuses `/v1/models`.
+
+The `think` config field only reaches the model here, which is why its toggle is hidden on other protocols — showing it would promise something they cannot deliver.
 
 **Provider-hosted tools**: the web-search toggle sends `tools: [{type: 'web_search_preview'}]`, which is an *OpenAI-hosted* tool — it has no `function` block because the provider is meant to run it server-side. `api.ts` gates it behind `supportsOpenAIHostedTools` (`@utils/api`, host-exact match on `api.openai.com`) because advertising it to a gateway that can't invoke it is actively harmful, not merely ignored: given a prompt that obviously calls for search, such as a URL to summarise, the model can reason toward that unreachable tool until generation dies — no content, no finish reason, a UI that looks hung. Any new provider-hosted tool needs the same gate.
 

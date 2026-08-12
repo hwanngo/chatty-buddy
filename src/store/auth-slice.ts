@@ -1,7 +1,16 @@
 import { defaultAPIEndpoint } from '@constants/auth';
 import { StoreSlice } from './store';
 
-export type ApiType = 'openai' | 'anthropic';
+/**
+ * Wire protocol for the configured endpoint.
+ *
+ * `ollama` targets ollama's **native** `/api/chat` rather than its
+ * OpenAI-compatible shim. That shim silently drops unknown parameters —
+ * measured: `think`, `enable_thinking`, `chat_template_kwargs`,
+ * `reasoning_effort` and `options.think` all had zero effect — so anything
+ * beyond the OpenAI surface is unreachable through it.
+ */
+export type ApiType = 'openai' | 'anthropic' | 'ollama';
 
 export interface AuthSlice {
   apiKey?: string;
