@@ -9,7 +9,7 @@ import remarkGfm from 'remark-gfm';
 import useStore from '@store/store';
 
 import Icon from '@components/Icon';
-import { PixelGridLoader } from '@components/AgentActivity';
+import { PixelGridLoader, ThinkingBlock } from '@components/AgentActivity';
 
 import useSubmit from '@hooks/useSubmit';
 
@@ -35,6 +35,7 @@ import CodeBlock from '../CodeBlock';
 import Dialog from '@components/Dialog';
 import { preprocessLaTeX } from '@utils/chat';
 import { sanitizeImageUrl } from '@utils/url';
+import { splitThinking } from '@utils/thinking';
 
 const ContentView = memo(
   ({
@@ -110,8 +111,25 @@ const ContentView = memo(
       setChats(updatedChats);
       handleSubmit();
     };
-    const currentTextContent = isTextContent(content[0]) ? content[0].text : '';
+    const rawTextContent = isTextContent(content[0]) ? content[0].text : '';
+
+    // Thinking models emit their chain of thought inline in the content, and
+    // nothing downstream renders it as markup — so left alone the tags show up
+    // as literal text welded to the answer. Split it out for display only;
+    // `content` keeps the original, so editing and export are unaffected.
+    // User messages are passed through untouched: a person quoting a `<think>`
+    // tag means it literally.
+    const { reasoning, answer, isOpen: isThinkingOpen } =
+      role === 'assistant'
+        ? splitThinking(rawTextContent)
+        : { reasoning: '', answer: rawTextContent, isOpen: false };
+
+    const currentTextContent = answer;
+
     const handleCopy = () => {
+      // Copy the answer, not the scaffolding. Someone copying a reply wants
+      // the reply — pasting `<think>` tags into a doc is the same bug in a
+      // different destination.
       navigator.clipboard.writeText(currentTextContent);
     };
 
@@ -125,10 +143,11 @@ const ContentView = memo(
     const validImageContents = Array.isArray(content)
       ? (content.slice(1).filter(isImageContent) as ImageContentInterface[])
       : [];
-    // Before the first token lands there is nothing to render and the message
-    // would be an empty block. Show the activity indicator instead, so the
-    // wait is legibly a wait — and, via its timer, a measurable one.
-    if (isStreamingHere && currentTextContent.length === 0) {
+    // Before anything at all arrives the message would be an empty block. Show
+    // the activity indicator instead, so the wait is legibly a wait — and, via
+    // its timer, a measurable one. Reasoning counts as arrival: once the model
+    // is mid-thought the thinking block takes over as the progress signal.
+    if (isStreamingHere && currentTextContent.length === 0 && !reasoning) {
       return (
         <PixelGridLoader
           startedAt={generatingStartedAt ?? Date.now()}
@@ -139,6 +158,12 @@ const ContentView = memo(
 
     return (
       <>
+        {reasoning && (
+          <ThinkingBlock
+            reasoning={reasoning}
+            isOpen={isStreamingHere && isThinkingOpen}
+          />
+        )}
         <div
           className='markdown prose w-full md:max-w-full break-words dark:prose-invert dark'
           aria-live='polite'

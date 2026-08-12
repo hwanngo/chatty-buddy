@@ -45,6 +45,7 @@ A powerful, privacy-focused ChatGPT client that runs in your browser and install
 - **Dual API protocol** — Switch between OpenAI-compatible and Anthropic Messages API format; supports Anthropic, Kimi, MiniMax, GLM, and any provider implementing either protocol
 - **Streaming responses** — Real-time token streaming for a fluid conversation experience
 - **Live activity indicator** — While a response is in flight but hasn't produced text yet, an animated pixel-grid loader shows what's happening plus a running elapsed timer, so a slow model is visibly *slow* rather than indistinguishable from *stuck*
+- **Reasoning traces** — Thinking models (DeepSeek-R1, Qwen 3, and similar) that emit `<think>…</think>` inline get their reasoning split into a collapsible block instead of dumping raw tags into the answer. Expanded while the model thinks, collapsed once the answer lands; the message is stored verbatim, so editing and export are unaffected
 - **Rich message content** — Support for text and images in conversations
 - **Markdown rendering** — Full GitHub-flavored Markdown with syntax highlighting, tables, and LaTeX math
 - **Code blocks** — Syntax highlighting for 30+ programming languages with copy-to-clipboard
@@ -326,6 +327,7 @@ chatty-buddy/
     ├── utils/                # Utility functions
     │   ├── api.ts            # API helpers (Azure detection, etc.)
     │   ├── modelReader.ts    # Model catalog parser
+    │   ├── thinking.ts       # Splits inline <think> reasoning out for display
     │   └── ...               # Other utilities
     │
     └── assets/
