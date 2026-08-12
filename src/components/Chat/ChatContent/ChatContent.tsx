@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ScrollToBottom from 'react-scroll-to-bottom';
 import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
@@ -8,7 +8,8 @@ import ChatTitle from './ChatTitle';
 import Message from './Message';
 import NewMessageButton from './Message/NewMessageButton';
 import EmptyState from './EmptyState';
-import { ToolChip } from '@components/AgentActivity';
+import type { TimelineStep } from '@components/AgentActivity';
+import { splitThinking } from '@utils/thinking';
 
 import useSubmit from '@hooks/useSubmit';
 import { TextContentInterface } from '@type/chat';
@@ -60,6 +61,58 @@ const ChatContent = () => {
     reduceMessagesToTotalToken,
     model
   );
+
+  // A turn that uses a tool is stored as several messages — the assistant's
+  // request, each tool result, then the answer. Rendered one-per-block that is
+  // three panes of chrome for a single exchange, and the middle ones are
+  // empty shells. Fold the intermediate ones into the answer's activity trace
+  // so the transcript stays question → answer.
+  //
+  // Display-only regrouping: `messages` is untouched, so indices still address
+  // the real message for edit, delete and reorder.
+  const displayRows = useMemo(() => {
+    const rows: {
+      message: MessageInterface;
+      index: number;
+      steps: TimelineStep[];
+    }[] = [];
+    let pending: TimelineStep[] = [];
+
+    const textOf = (m: MessageInterface) =>
+      String((m.content?.[0] as TextContentInterface)?.text ?? '');
+
+    messagesLimited.forEach((message, index) => {
+      if (message.role === 'assistant' && message.tool_calls) {
+        const { reasoning } = splitThinking(textOf(message));
+        if (reasoning) pending.push({ kind: 'reasoning', text: reasoning });
+        return; // absorbed into the next answer
+      }
+      if (message.role === 'tool') {
+        const content = textOf(message);
+        pending.push({
+          kind: 'tool',
+          label: message.tool_name,
+          content,
+          failed: content.startsWith('Error:'),
+        });
+        return; // absorbed
+      }
+      rows.push({ message, index, steps: pending });
+      pending = [];
+    });
+
+    // A run that never reached an answer (stopped mid-tool) still has to show,
+    // otherwise the work silently disappears from the transcript.
+    if (pending.length > 0) {
+      const last = messagesLimited[messagesLimited.length - 1];
+      rows.push({
+        message: last,
+        index: messagesLimited.length - 1,
+        steps: pending,
+      });
+    }
+    return rows;
+  }, [messagesLimited]);
 
   const handleReduceMessages = () => {
     const confirmMessage = t('reduceMessagesWarning');
@@ -202,38 +255,18 @@ const ChatContent = () => {
                 {!generating && advancedMode && messages?.length === 0 && (
                   <NewMessageButton messageIndex={-1} />
                 )}
-                {messagesLimited?.map(
-                  (message, index) =>
+                {displayRows.map(
+                  ({ message, index, steps }) =>
                     (advancedMode ||
                       index !== 0 ||
-                      message.role !== 'system') &&
-                    // An assistant turn that only requested a tool has no text
-                    // of its own — the tool chip below it is the whole story,
-                    // so an empty message block would just be dead space.
-                    !(
-                      message.role === 'assistant' &&
-                      message.tool_calls &&
-                      !(message.content[0] as TextContentInterface)?.text
-                    ) && (
+                      message.role !== 'system') && (
                       <React.Fragment key={index}>
-                        {message.role === 'tool' ? (
-                          // Tool results get a compact chip instead of the
-                          // full message chrome — no role picker or edit
-                          // controls, since the app authored them, not a user.
-                          <ToolChip
-                            label={message.tool_name}
-                            content={
-                              (message.content[0] as TextContentInterface)
-                                ?.text ?? ''
-                            }
-                          />
-                        ) : (
-                          <Message
-                            role={message.role}
-                            content={message.content}
-                            messageIndex={index}
-                          />
-                        )}
+                        <Message
+                          role={message.role}
+                          content={message.content}
+                          messageIndex={index}
+                          priorSteps={steps}
+                        />
                         {!generating && advancedMode && (
                           <NewMessageButton messageIndex={index} />
                         )}

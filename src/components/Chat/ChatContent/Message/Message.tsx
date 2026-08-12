@@ -8,6 +8,7 @@ import TokenCount from '@components/TokenCount';
 import PromptLibraryPicker from '@components/PromptLibraryMenu/PromptLibraryPicker';
 
 import { ContentInterface, Role, TextContentInterface } from '@type/chat';
+import type { TimelineStep } from '@components/AgentActivity';
 import countTokens from '@utils/messageUtils';
 import { modelCost } from '@constants/modelLoader';
 import { ModelOptions } from '@utils/modelReader';
@@ -24,11 +25,14 @@ const Message = React.memo(
     content,
     messageIndex,
     sticky = false,
+    priorSteps,
   }: {
     role: Role;
     content: ContentInterface[];
     messageIndex: number;
     sticky?: boolean;
+    /** Activity absorbed from intermediate tool-round messages, if any. */
+    priorSteps?: TimelineStep[];
   }) => {
     const advancedMode = useStore((state) => state.advancedMode);
     const model = useStore((state) =>
@@ -178,6 +182,7 @@ const Message = React.memo(
             messageIndex={messageIndex}
             sticky={sticky}
             hideDelete={true}
+            priorSteps={priorSteps}
           />
         </div>
       </div>

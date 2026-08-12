@@ -9,7 +9,11 @@ import remarkGfm from 'remark-gfm';
 import useStore from '@store/store';
 
 import Icon from '@components/Icon';
-import { PixelGridLoader, ThinkingBlock } from '@components/AgentActivity';
+import {
+  PixelGridLoader,
+  AgentTimeline,
+  type TimelineStep,
+} from '@components/AgentActivity';
 
 import useSubmit from '@hooks/useSubmit';
 
@@ -44,12 +48,15 @@ const ContentView = memo(
     setIsEdit,
     messageIndex,
     hideDelete = false,
+    priorSteps,
   }: {
     role: string;
     content: ContentInterface[];
     setIsEdit: React.Dispatch<React.SetStateAction<boolean>>;
     messageIndex: number;
     hideDelete?: boolean;
+    /** Reasoning and tool calls absorbed from this turn's earlier messages. */
+    priorSteps?: TimelineStep[];
   }) => {
     const { handleSubmit } = useSubmit();
 
@@ -126,6 +133,13 @@ const ContentView = memo(
 
     const currentTextContent = answer;
 
+    // One trace for the whole turn: whatever the earlier messages contributed,
+    // then this message's own reasoning last.
+    const timelineSteps: TimelineStep[] = [
+      ...(priorSteps ?? []),
+      ...(reasoning ? [{ kind: 'reasoning' as const, text: reasoning }] : []),
+    ];
+
     const handleCopy = () => {
       // Copy the answer, not the scaffolding. Someone copying a reply wants
       // the reply — pasting `<think>` tags into a doc is the same bug in a
@@ -147,7 +161,11 @@ const ContentView = memo(
     // the activity indicator instead, so the wait is legibly a wait — and, via
     // its timer, a measurable one. Reasoning counts as arrival: once the model
     // is mid-thought the thinking block takes over as the progress signal.
-    if (isStreamingHere && currentTextContent.length === 0 && !reasoning) {
+    if (
+      isStreamingHere &&
+      currentTextContent.length === 0 &&
+      timelineSteps.length === 0
+    ) {
       return (
         <PixelGridLoader
           startedAt={generatingStartedAt ?? Date.now()}
@@ -158,12 +176,10 @@ const ContentView = memo(
 
     return (
       <>
-        {reasoning && (
-          <ThinkingBlock
-            reasoning={reasoning}
-            isOpen={isStreamingHere && isThinkingOpen}
-          />
-        )}
+        <AgentTimeline
+          steps={timelineSteps}
+          isThinking={isStreamingHere && isThinkingOpen}
+        />
         <div
           className='markdown prose w-full md:max-w-full break-words dark:prose-invert dark'
           aria-live='polite'

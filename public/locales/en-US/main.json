@@ -112,5 +112,7 @@
     "select": "Select"
   },
   "toolFetched": "Fetched",
-  "toolFailed": "Fetch failed"
+  "toolFailed": "Fetch failed",
+  "readPages": "Read {{count}} pages",
+  "viewFetched": "View fetched content"
 }

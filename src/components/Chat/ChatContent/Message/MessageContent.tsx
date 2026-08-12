@@ -4,6 +4,7 @@ import useStore from '@store/store';
 import ContentView from './View/ContentView';
 import EditView from './View/EditView';
 import { ContentInterface } from '@type/chat';
+import type { TimelineStep } from '@components/AgentActivity';
 
 const MessageContent = ({
   role,
@@ -11,12 +12,14 @@ const MessageContent = ({
   messageIndex,
   sticky = false,
   hideDelete = false,
+  priorSteps,
 }: {
   role: string;
   content: ContentInterface[];
   messageIndex: number;
   sticky?: boolean;
   hideDelete?: boolean;
+  priorSteps?: TimelineStep[];
 }) => {
   const [isEdit, setIsEdit] = useState<boolean>(sticky);
   const advancedMode = useStore((state) => state.advancedMode);
@@ -38,6 +41,7 @@ const MessageContent = ({
           setIsEdit={setIsEdit}
           messageIndex={messageIndex}
           hideDelete={hideDelete}
+          priorSteps={priorSteps}
         />
       )}
     </div>

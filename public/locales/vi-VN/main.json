@@ -112,5 +112,7 @@
     "select": "Chọn"
   },
   "toolFetched": "Đã tải",
-  "toolFailed": "Tải thất bại"
+  "toolFailed": "Tải thất bại",
+  "readPages": "Đã đọc {{count}} trang",
+  "viewFetched": "Xem nội dung đã tải"
 }
