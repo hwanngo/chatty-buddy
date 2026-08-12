@@ -7,7 +7,10 @@ import { Theme } from './theme';
 export type Content = 'text' | 'image_url';
 export type ImageDetail = 'low' | 'high' | 'auto';
 const imageDetails: ImageDetail[] = ['low', 'high', 'auto'];
-export type Role = 'user' | 'assistant' | 'system';
+// `tool` carries the result of a client-executed tool call back to the model.
+// It is deliberately absent from `roles` below: that array drives the role
+// picker, and a tool result is produced by the app, never authored by hand.
+export type Role = 'user' | 'assistant' | 'system' | 'tool';
 export const roles: Role[] = ['user', 'assistant', 'system'];
 
 export interface ImageContentInterface extends ContentInterface {
@@ -55,9 +58,26 @@ export interface ContentInterface {
   type: Content;
 }
 
+/** A function call the model asked the client to perform. */
+export interface ToolCallInterface {
+  id: string;
+  type: 'function';
+  function: {
+    name: string;
+    /** JSON, as a string — the model streams it in fragments. */
+    arguments: string;
+  };
+}
+
 export interface MessageInterface {
   role: Role;
   content: ContentInterface[];
+  /** Set on an `assistant` message that requested one or more tool calls. */
+  tool_calls?: ToolCallInterface[];
+  /** Set on a `tool` message: which call this is the result of. */
+  tool_call_id?: string;
+  /** Set on a `tool` message: display label for the chip in the transcript. */
+  tool_name?: string;
 }
 
 export interface ChatInterface {
@@ -81,6 +101,15 @@ export interface ConfigInterface {
   frequency_penalty: number;
   webSearch?: boolean;
   reasoningEffort?: ReasoningEffort | null;
+  /**
+   * Let the model pull a web page into the conversation via the `fetch_url`
+   * function tool. Off by default: it is the one feature that sends anything
+   * to a third party (the reader service), so it must be opted into.
+   *
+   * Optional and falsy-by-default, which is why existing chats need no
+   * migration — a chat saved before this field existed simply has it absent.
+   */
+  fetchUrl?: boolean;
 }
 
 export interface ChatHistoryInterface {

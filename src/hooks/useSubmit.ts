@@ -5,7 +5,17 @@ import {
   ConfigInterface,
   MessageInterface,
   TextContentInterface,
+  ToolCallInterface,
 } from '@type/chat';
+import { executeToolCall } from '@utils/tools';
+
+/**
+ * How many times the model may call a tool before we stop honouring requests
+ * within a single submit. Each round is a full round-trip plus a page fetch on
+ * the user's clock, and a model that loops would otherwise never hand back
+ * control. Three is enough for "fetch, notice a redirect, fetch again".
+ */
+const MAX_TOOL_ROUNDS = 3;
 import {
   getChatCompletion,
   getChatCompletionStream,
@@ -34,6 +44,19 @@ const useSubmit = () => {
   const generating = useStore((state) => state.generating);
   const currentChatIndex = useStore((state) => state.currentChatIndex);
   const setChats = useStore((state) => state.setChats);
+
+  /** Appends text to the message currently being streamed into. */
+  const appendToLastMessage = (text: string) => {
+    const updatedChats: ChatInterface[] = JSON.parse(
+      JSON.stringify(useStore.getState().chats)
+    );
+    const updatedMessages = updatedChats[currentChatIndex].messages;
+    (
+      updatedMessages[updatedMessages.length - 1]
+        .content[0] as TextContentInterface
+    ).text += text;
+    setChats(updatedChats);
+  };
 
   const generateTitle = async (
     message: MessageInterface[],
@@ -222,43 +245,45 @@ const useSubmit = () => {
         }
       } else {
         // ── Streaming branch ──────────────────────────────────────────────
-        if (apiType === 'anthropic') {
-          stream = await getAnthropicChatCompletionStream(
-            useStore.getState().apiEndpoint,
-            messages,
-            chats[currentChatIndex].config,
-            apiKey || undefined,
-            signal
-          );
-        } else {
-          // OpenAI streaming (unchanged)
-          if (!apiKey || apiKey.length === 0) {
-            if (apiEndpoint === officialAPIEndpoint) {
+        // What we send this round. When the model asks for a tool, its request
+        // and the tool's result are appended here so the next round sees them.
+        let roundMessages: MessageInterface[] = messages;
+
+        for (let round = 0; ; round++) {
+          if (apiType === 'anthropic') {
+            stream = await getAnthropicChatCompletionStream(
+              useStore.getState().apiEndpoint,
+              roundMessages,
+              chats[currentChatIndex].config,
+              apiKey || undefined,
+              signal
+            );
+          } else {
+            // The official endpoint is the only one that *requires* a key;
+            // local and self-hosted endpoints are commonly keyless.
+            if (
+              (!apiKey || apiKey.length === 0) &&
+              apiEndpoint === officialAPIEndpoint
+            ) {
               throw new Error(t('noApiKeyWarning') as string);
             }
             stream = await getChatCompletionStream(
               useStore.getState().apiEndpoint,
-              messages,
+              roundMessages,
               chats[currentChatIndex].config,
-              undefined,
-              undefined,
-              useStore.getState().apiVersion,
-              signal
-            );
-          } else if (apiKey) {
-            stream = await getChatCompletionStream(
-              useStore.getState().apiEndpoint,
-              messages,
-              chats[currentChatIndex].config,
-              apiKey,
+              apiKey || undefined,
               undefined,
               useStore.getState().apiVersion,
               signal
             );
           }
-        }
 
-        if (stream) {
+          // Tool calls stream in fragments — id and name in one chunk, the
+          // JSON arguments dribbled across many — so they're accumulated by
+          // index and only executed once the stream closes.
+          const toolCallAcc: ToolCallInterface[] = [];
+
+          if (stream) {
           if (stream.locked)
             throw new Error(t('errors.streamLocked') as string);
           const reader = stream.getReader();
@@ -372,6 +397,23 @@ const useSubmit = () => {
                     }
                     resultString += content;
                   }
+
+                  // Merge tool-call fragments by index. `id` and `name` show
+                  // up once, `arguments` accumulates across many chunks, so
+                  // only the argument string is concatenated.
+                  for (const fragment of delta.tool_calls ?? []) {
+                    const at = fragment.index ?? 0;
+                    const slot = (toolCallAcc[at] ??= {
+                      id: '',
+                      type: 'function',
+                      function: { name: '', arguments: '' },
+                    });
+                    if (fragment.id) slot.id = fragment.id;
+                    if (fragment.function?.name)
+                      slot.function.name = fragment.function.name;
+                    if (fragment.function?.arguments)
+                      slot.function.arguments += fragment.function.arguments;
+                  }
                 }
               }
 
@@ -415,6 +457,62 @@ const useSubmit = () => {
           }
           reader.releaseLock();
           stream.cancel();
+        }
+
+          // No tool requested, or the user stopped the run — this round's
+          // answer is the final one.
+          const requested = toolCallAcc.filter((c) => c && c.function.name);
+          if (requested.length === 0 || !useStore.getState().generating) break;
+
+          // A model that keeps calling tools would otherwise loop forever on
+          // the user's clock. Stop, and say so in the transcript rather than
+          // silently returning a half-finished answer.
+          if (round >= MAX_TOOL_ROUNDS - 1) {
+            appendToLastMessage(
+              `\n\n_${t('errors.toolRoundLimit', {
+                count: MAX_TOOL_ROUNDS,
+              })}_`
+            );
+            break;
+          }
+
+          // Record the request on the assistant message that made it, then run
+          // each call and append its result. Both go into the transcript, so a
+          // follow-up question can still see what the page said.
+          const assistantWithCalls: MessageInterface = {
+            role: 'assistant',
+            content: [{ type: 'text', text: '' } as TextContentInterface],
+            tool_calls: requested,
+          };
+
+          const toolMessages: MessageInterface[] = [];
+          for (const call of requested) {
+            const result = await executeToolCall(call, signal);
+            toolMessages.push({
+              role: 'tool',
+              tool_call_id: call.id,
+              tool_name: result.label,
+              content: [
+                { type: 'text', text: result.content } as TextContentInterface,
+              ],
+            });
+          }
+
+          roundMessages = [...roundMessages, assistantWithCalls, ...toolMessages];
+
+          // Mirror into the visible chat: annotate the placeholder we've been
+          // streaming into, add the tool results, then open a fresh assistant
+          // message for the next round to write to.
+          const withTools: ChatInterface[] = JSON.parse(
+            JSON.stringify(useStore.getState().chats)
+          );
+          const visible = withTools[currentChatIndex].messages;
+          visible[visible.length - 1].tool_calls = requested;
+          visible.push(...toolMessages, {
+            role: 'assistant',
+            content: [{ type: 'text', text: '' } as TextContentInterface],
+          });
+          setChats(withTools);
         }
       }
 

@@ -110,5 +110,7 @@
     "information": "Thông tin",
     "loading": "Đang tải",
     "select": "Chọn"
-  }
+  },
+  "toolFetched": "Đã tải",
+  "toolFailed": "Tải thất bại"
 }

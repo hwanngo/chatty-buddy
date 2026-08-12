@@ -675,6 +675,7 @@ const InputToolbar = ({
       : undefined
   );
   const webSearch = chat?.config.webSearch ?? false;
+  const fetchUrl = chat?.config.fetchUrl ?? false;
   const reasoningEffort = chat?.config.reasoningEffort ?? null;
   const imageDetail = chat?.imageDetail ?? 'auto';
 
@@ -751,6 +752,7 @@ const InputToolbar = ({
 
   const activeToolCount =
     (webSearch ? 1 : 0) +
+    (fetchUrl ? 1 : 0) +
     (reasoningEffort ? 1 : 0) +
     (hasImages && imageDetail !== 'auto' ? 1 : 0);
 
@@ -770,6 +772,16 @@ const InputToolbar = ({
     );
     updatedChats[currentChatIndex].config.webSearch =
       !updatedChats[currentChatIndex].config.webSearch;
+    setChats(updatedChats);
+  };
+
+  const handleToggleFetchUrl = () => {
+    if (!useStore.getState().chats) return;
+    const updatedChats: ChatInterface[] = JSON.parse(
+      JSON.stringify(useStore.getState().chats)
+    );
+    updatedChats[currentChatIndex].config.fetchUrl =
+      !updatedChats[currentChatIndex].config.fetchUrl;
     setChats(updatedChats);
   };
 
@@ -870,6 +882,29 @@ const InputToolbar = ({
                   <span
                     className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-transform ${
                       webSearch ? 'translate-x-[16px]' : 'translate-x-[2px]'
+                    }`}
+                  />
+                </span>
+              </button>
+
+              {/* Fetch URL — client-executed tool, works on any endpoint */}
+              <button
+                type='button'
+                onClick={handleToggleFetchUrl}
+                className='w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] text-[var(--fg)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer'
+              >
+                <span className='flex items-center gap-2'>
+                  <Icon name='globe' className='w-4 h-4' />
+                  {t('fetchUrl.label')}
+                </span>
+                <span
+                  className={`relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full transition-colors ${
+                    fetchUrl ? 'bg-[var(--accent)]' : 'bg-[var(--border-mid)]'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-[2px] h-[14px] w-[14px] rounded-full bg-white transition-transform ${
+                      fetchUrl ? 'translate-x-[16px]' : 'translate-x-[2px]'
                     }`}
                   />
                 </span>

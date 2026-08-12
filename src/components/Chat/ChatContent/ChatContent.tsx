@@ -8,6 +8,7 @@ import ChatTitle from './ChatTitle';
 import Message from './Message';
 import NewMessageButton from './Message/NewMessageButton';
 import EmptyState from './EmptyState';
+import { ToolChip } from '@components/AgentActivity';
 
 import useSubmit from '@hooks/useSubmit';
 import { TextContentInterface } from '@type/chat';
@@ -205,13 +206,34 @@ const ChatContent = () => {
                   (message, index) =>
                     (advancedMode ||
                       index !== 0 ||
-                      message.role !== 'system') && (
+                      message.role !== 'system') &&
+                    // An assistant turn that only requested a tool has no text
+                    // of its own — the tool chip below it is the whole story,
+                    // so an empty message block would just be dead space.
+                    !(
+                      message.role === 'assistant' &&
+                      message.tool_calls &&
+                      !(message.content[0] as TextContentInterface)?.text
+                    ) && (
                       <React.Fragment key={index}>
-                        <Message
-                          role={message.role}
-                          content={message.content}
-                          messageIndex={index}
-                        />
+                        {message.role === 'tool' ? (
+                          // Tool results get a compact chip instead of the
+                          // full message chrome — no role picker or edit
+                          // controls, since the app authored them, not a user.
+                          <ToolChip
+                            label={message.tool_name}
+                            content={
+                              (message.content[0] as TextContentInterface)
+                                ?.text ?? ''
+                            }
+                          />
+                        ) : (
+                          <Message
+                            role={message.role}
+                            content={message.content}
+                            messageIndex={index}
+                          />
+                        )}
                         {!generating && advancedMode && (
                           <NewMessageButton messageIndex={index} />
                         )}

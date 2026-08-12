@@ -23,5 +23,8 @@
     "inputLabel": "Định dạng API",
     "openai": "Tương thích OpenAI",
     "anthropic": "Tương thích Anthropic"
+  },
+  "errors": {
+    "toolRoundLimit": "Đã dừng sau {{count}} lượt gọi công cụ."
   }
 }

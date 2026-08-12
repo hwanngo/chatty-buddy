@@ -41,6 +41,18 @@ Not all store state is persisted. `createPartializedState` in `store.ts` is the 
 
 **Provider-hosted tools**: the web-search toggle sends `tools: [{type: 'web_search_preview'}]`, which is an *OpenAI-hosted* tool — it has no `function` block because the provider is meant to run it server-side. `api.ts` gates it behind `supportsOpenAIHostedTools` (`@utils/api`, host-exact match on `api.openai.com`) because advertising it to a gateway that can't invoke it is actively harmful, not merely ignored: given a prompt that obviously calls for search, such as a URL to summarise, the model can reason toward that unreachable tool until generation dies — no content, no finish reason, a UI that looks hung. Any new provider-hosted tool needs the same gate.
 
+**Client-executed tools** (`src/utils/tools.ts`, loop in `useSubmit.ts`): the `fetch_url` tool lets the model pull a web page into the conversation. Unlike `web_search_preview` it is an ordinary function tool — *this app* performs the work — which is the only shape that works against a local runtime.
+
+Things that are load-bearing:
+- **Tool calls stream in fragments.** `id` and `name` arrive once, `arguments` dribbles across many chunks. They're merged by `index` and executed only after the stream closes; concatenating `arguments` (and *not* `name`) is the whole trick.
+- **`toApiMessages` in `api.ts` is required, not cosmetic.** A `tool` message's `content` must be a plain string — internally every message holds a content-parts array — and `tool_name` is ours for the chip, so sending it would put an unknown field in the body.
+- **`limitMessageTokens` drops leading orphan `tool` messages.** Trimming walks backwards and can cut between an assistant's `tool_calls` and its result; providers reject a result with nothing to attach to.
+- **`MAX_TOOL_ROUNDS` (3)** bounds the loop. Each round is a round-trip plus a page fetch on the user's clock; hitting the cap writes a note into the transcript rather than silently returning a half-answer.
+- Tool results are **persisted** so follow-up questions can still see the page, and rendered as a collapsed `ToolChip` — never as markdown, since that would let a fetched page inject headings into the transcript.
+- Anthropic is excluded end-to-end: no tools in its payload, and `convertMessagesForAnthropic` filters `tool` messages so a chat started on OpenAI can't emit an invalid role after switching.
+
+The page is fetched through `r.jina.ai`, which is a requirement rather than a convenience — a browser can't fetch arbitrary sites, because almost nothing serves the necessary CORS headers. It is also the only thing in the app that discloses anything to a third party, which is why `fetchUrl` defaults off.
+
 **Math rendering** (`src/utils/latex.ts`): `$` is both a math delimiter and a currency symbol, so with single-dollar math enabled "costs $5 and shipping is $10" parses `5 and shipping is ` as an equation. `preprocessLaTeX` discriminates on whitespace against the delimiter — real inline math is tight (`$O(1)$`), currency pairs leave a space against one end — and escapes the currency case. It skips fenced blocks and inline code spans, so a `` `$5` `` in code is never rewritten. This is what made it safe to turn `inlineLatex` on by default (schema v3 migrates existing users, who would otherwise keep the old `false`).
 
 **Constants**: `src/constants/auth.ts` exports `officialAPIEndpoint` (OpenAI), `defaultAPIEndpoint` (env-overridable), `anthropicAPIEndpoint` (`https://api.anthropic.com/v1/messages`), and `availableEndpoints` (preset OpenAI dropdown options).

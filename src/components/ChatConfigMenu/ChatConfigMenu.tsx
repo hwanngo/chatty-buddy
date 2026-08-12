@@ -72,6 +72,7 @@ const ChatConfigPopup = ({
   const [_webSearch, _setWebSearch] = useState<boolean>(
     config.webSearch ?? false
   );
+  const [_fetchUrl, _setFetchUrl] = useState<boolean>(config.fetchUrl ?? false);
   const [_reasoningEffort, _setReasoningEffort] =
     useState<ReasoningEffort | null>(config.reasoningEffort ?? null);
 
@@ -86,6 +87,7 @@ const ChatConfigPopup = ({
       presence_penalty: _presencePenalty,
       frequency_penalty: _frequencyPenalty,
       webSearch: _webSearch,
+      fetchUrl: _fetchUrl,
       reasoningEffort: _reasoningEffort,
     });
     setDefaultSystemMessage(_systemMessage);
@@ -104,6 +106,7 @@ const ChatConfigPopup = ({
     _setSystemMessage(_defaultSystemMessage);
     _setImageDetail(_defaultImageDetail);
     _setWebSearch(_defaultChatConfig.webSearch ?? false);
+    _setFetchUrl(_defaultChatConfig.fetchUrl ?? false);
     _setReasoningEffort(_defaultChatConfig.reasoningEffort ?? null);
   };
 
@@ -171,6 +174,35 @@ const ChatConfigPopup = ({
               <span
                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
                   _webSearch ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Fetch URL default */}
+        <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
+          <div className='flex items-center justify-between'>
+            <div>
+              <label className='block text-sm font-medium text-[var(--fg)]'>
+                {t('fetchUrl.label')}
+              </label>
+              <p className='mt-1 text-xs text-[var(--fg-3)]'>
+                {t('fetchUrl.description')}
+              </p>
+            </div>
+            <button
+              type='button'
+              role='switch'
+              aria-checked={_fetchUrl}
+              onClick={() => _setFetchUrl((v) => !v)}
+              className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
+                _fetchUrl ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sand)]'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  _fetchUrl ? 'translate-x-6' : 'translate-x-1'
                 }`}
               />
             </button>

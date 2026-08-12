@@ -21,6 +21,18 @@ export interface EventSourceDataChoices {
      */
     reasoning?: string;
     reasoning_content?: string;
+    /**
+     * Tool calls arrive in fragments across chunks: `index` identifies which
+     * call a fragment belongs to, `id`/`name` appear once, and `arguments`
+     * accumulates. Every field is optional because any chunk may carry only
+     * part of one.
+     */
+    tool_calls?: {
+      index?: number;
+      id?: string;
+      type?: 'function';
+      function?: { name?: string; arguments?: string };
+    }[];
   };
   finish_reason?: string;
   index: number;

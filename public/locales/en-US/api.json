@@ -23,5 +23,8 @@
     "inputLabel": "API Format",
     "openai": "OpenAI Compatible",
     "anthropic": "Anthropic Compatible"
+  },
+  "errors": {
+    "toolRoundLimit": "Stopped after {{count}} tool rounds."
   }
 }

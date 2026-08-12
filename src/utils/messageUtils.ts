@@ -83,6 +83,15 @@ export const limitMessageTokens = (
     limitedMessages.unshift({ ...messages[i] });
   }
 
+  // Trimming walks backwards, so it can cut between an assistant message that
+  // requested a tool and the `tool` message answering it — leaving a result
+  // with nothing to attach to. Providers reject that outright ("tool message
+  // must be a response to a preceding tool_calls"), so drop any leading
+  // orphans before they reach the API.
+  while (limitedMessages.length > 0 && limitedMessages[0].role === 'tool') {
+    limitedMessages.shift();
+  }
+
   // Restore the system prompt at the front of whatever history fit.
   if (retainSystemMessage) {
     limitedMessages.unshift({ ...messages[0] });

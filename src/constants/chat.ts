@@ -31,6 +31,7 @@ export const _defaultChatConfig: ConfigInterface = {
   top_p: 1,
   frequency_penalty: 0,
   webSearch: false,
+  fetchUrl: false,
   reasoningEffort: null,
 };
 

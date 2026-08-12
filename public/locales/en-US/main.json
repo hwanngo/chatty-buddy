@@ -110,5 +110,7 @@
     "information": "Information",
     "loading": "Loading",
     "select": "Select"
-  }
+  },
+  "toolFetched": "Fetched",
+  "toolFailed": "Fetch failed"
 }

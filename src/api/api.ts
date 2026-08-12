@@ -6,6 +6,7 @@ import {
   TextContentInterface,
 } from '@type/chat';
 import { isAzureEndpoint, supportsOpenAIHostedTools } from '@utils/api';
+import { TOOL_DEFINITIONS } from '@utils/tools';
 import { assertSafeApiEndpoint } from '@utils/url';
 import { ModelOptions } from '@utils/modelReader';
 
@@ -75,7 +76,9 @@ function convertMessagesForAnthropic(messages: MessageInterface[]): {
       : undefined;
 
   const convertedMessages = messages
-    .filter((m) => m.role !== 'system')
+    // `tool` messages come from the OpenAI-side tool loop; Anthropic has no
+    // equivalent wired up, and mapping one would emit an invalid role.
+    .filter((m) => m.role !== 'system' && m.role !== 'tool')
     .map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content.map((block): Record<string, unknown> => {
@@ -107,6 +110,52 @@ function convertMessagesForAnthropic(messages: MessageInterface[]): {
 
   return { systemPrompt, convertedMessages };
 }
+
+/**
+ * Converts the internal message array to what an OpenAI-compatible endpoint
+ * expects. Two things need fixing up, both of which providers are strict about:
+ *
+ * - A `tool` message's `content` must be a plain **string**. Internally every
+ *   message holds a content-parts array (needed for images), which stricter
+ *   servers reject on this role.
+ * - `tool_name` is ours, for the transcript chip. Sending it would put an
+ *   unknown field in the request body, the same way `fetchUrl` would if it
+ *   weren't destructured out of the config.
+ */
+const toApiMessages = (messages: MessageInterface[]) =>
+  messages.map((message) => {
+    const { tool_name: _clientOnly, ...rest } = message;
+    if (message.role !== 'tool') return rest;
+    return {
+      ...rest,
+      content: message.content
+        .filter((block) => block.type === 'text')
+        .map((block) => (block as TextContentInterface).text)
+        .join('\n'),
+    };
+  });
+
+/**
+ * Assembles the `tools` array for a request. Two kinds, and the distinction is
+ * what makes this worth a function:
+ *
+ * - `web_search_preview` is **provider-hosted**: it has no function body, and
+ *   only OpenAI can execute it. Offered to anyone else it is not ignored but
+ *   actively harmful — the model can reason toward a tool that never resolves
+ *   until generation dies with no content. Hence the host gate.
+ * - `fetch_url` is **client-executed**: this app runs it, so it works against
+ *   any OpenAI-compatible endpoint, local ones included.
+ */
+const buildTools = (
+  endpoint: string,
+  webSearch?: boolean,
+  fetchUrl?: boolean
+) => [
+  ...(webSearch && supportsOpenAIHostedTools(endpoint)
+    ? [{ type: 'web_search_preview' }]
+    : []),
+  ...(fetchUrl ? TOOL_DEFINITIONS : []),
+];
 
 export const getChatCompletion = async (
   endpoint: string,
@@ -149,22 +198,20 @@ export const getChatCompletion = async (
   endpoint = endpoint.trim();
   assertSafeApiEndpoint(endpoint);
 
-  const { webSearch, reasoningEffort, ...apiConfig } = config;
+  // `webSearch`, `reasoningEffort` and `fetchUrl` are client-side switches,
+  // not model parameters — destructured out so `...apiConfig` can't leak them
+  // into the request body as unknown fields.
+  const { webSearch, reasoningEffort, fetchUrl, ...apiConfig } = config;
+  const tools = buildTools(endpoint, webSearch, fetchUrl);
   const response = await safeFetch(endpoint, {
     method: 'POST',
     headers,
     signal,
     body: JSON.stringify({
-      messages,
+      messages: toApiMessages(messages),
       ...apiConfig,
       max_tokens: undefined,
-      // Only OpenAI can run its own hosted tools. Advertising one to a
-      // gateway that can't invoke it (ollama et al) can leave the model
-      // reasoning toward a tool that never resolves — see
-      // `supportsOpenAIHostedTools`.
-      ...(webSearch && supportsOpenAIHostedTools(endpoint)
-        ? { tools: [{ type: 'web_search_preview' }] }
-        : {}),
+      ...(tools.length > 0 ? { tools } : {}),
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });
@@ -214,23 +261,21 @@ export const getChatCompletionStream = async (
   }
   endpoint = endpoint.trim();
   assertSafeApiEndpoint(endpoint);
-  const { webSearch, reasoningEffort, ...apiConfig } = config;
+  // `webSearch`, `reasoningEffort` and `fetchUrl` are client-side switches,
+  // not model parameters — destructured out so `...apiConfig` can't leak them
+  // into the request body as unknown fields.
+  const { webSearch, reasoningEffort, fetchUrl, ...apiConfig } = config;
+  const tools = buildTools(endpoint, webSearch, fetchUrl);
   const response = await safeFetch(endpoint, {
     method: 'POST',
     headers,
     signal,
     body: JSON.stringify({
-      messages,
+      messages: toApiMessages(messages),
       ...apiConfig,
       max_tokens: undefined,
       stream: true,
-      // Only OpenAI can run its own hosted tools. Advertising one to a
-      // gateway that can't invoke it (ollama et al) can leave the model
-      // reasoning toward a tool that never resolves — see
-      // `supportsOpenAIHostedTools`.
-      ...(webSearch && supportsOpenAIHostedTools(endpoint)
-        ? { tools: [{ type: 'web_search_preview' }] }
-        : {}),
+      ...(tools.length > 0 ? { tools } : {}),
       ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });
