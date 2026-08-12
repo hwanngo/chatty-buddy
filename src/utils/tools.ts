@@ -31,6 +31,38 @@ const READER_ENDPOINT = 'https://r.jina.ai/';
  */
 const MAX_CONTENT_CHARS = 20000;
 
+/**
+ * Shortest body we'll believe is a real page.
+ *
+ * Measured, not guessed: a cached voz.vn thread came back as 271 bytes whose
+ * title was an ad-tracker URL, while the same page fetched with caching off
+ * was ~38KB. Anything this small is a redirect stub, a consent wall, or a
+ * tracker probe — never an article.
+ */
+const MIN_BODY_CHARS = 200;
+
+/** The reader prefixes metadata and then this marker before the page body. */
+const BODY_MARKER = 'Markdown Content:';
+
+/**
+ * Whether a 200 response actually contains a readable page.
+ *
+ * HTTP status alone is not enough: the reader answers 200 for stubs and
+ * tracker pixels too, and handing one to the model is worse than reporting a
+ * failure — it looks like real content, so the model fills the gap by
+ * inferring from the URL slug and states the result as fact.
+ */
+const looksUnreadable = (raw: string): boolean => {
+  const markerAt = raw.indexOf(BODY_MARKER);
+  const body = markerAt === -1 ? raw : raw.slice(markerAt + BODY_MARKER.length);
+  if (body.trim().length < MIN_BODY_CHARS) return true;
+
+  // A title that is itself a URL means the reader landed on a redirect or
+  // consent endpoint rather than the page that was asked for.
+  const title = /^Title:\s*(.+)$/m.exec(raw)?.[1]?.trim() ?? '';
+  return /^https?:\/\//i.test(title);
+};
+
 export const FETCH_URL_TOOL = {
   type: 'function' as const,
   function: {
@@ -96,6 +128,19 @@ const parseUrlArgument = (rawArguments: string): string => {
 };
 
 /**
+ * Failure text handed back to the model.
+ *
+ * The explicit instruction is there because of an observed failure: given a
+ * near-empty page, a model reconstructed a plausible summary from words in the
+ * URL slug and presented it as what the article said. A bare "could not fetch"
+ * leaves that door open, so the message closes it.
+ */
+const fetchFailed = (url: string, reason: string) =>
+  `Error: could not read ${url} (${reason}). ` +
+  `Do not infer or guess what the page says — in particular, do not derive ` +
+  `it from words in the URL. Tell the user the page could not be fetched.`;
+
+/**
  * Runs one tool call and always resolves to something the model can read.
  *
  * Failures are returned as text rather than thrown: a tool that errors should
@@ -133,18 +178,41 @@ export const executeToolCall = async (
   })();
 
   try {
-    const response = await fetch(READER_ENDPOINT + url, {
-      signal,
-      headers: { Accept: 'text/plain' },
-    });
-    if (!response.ok) {
+    // Some sites serve an ad or consent interstitial to the reader's crawler
+    // instead of the page, and either the cache or a live crawl can be the one
+    // holding junk — observed both ways round on the same URL within minutes.
+    // So: take the cached copy first (it's faster), and only if that looks
+    // unreadable spend a second request forcing a fresh crawl. Neither mode is
+    // reliable alone; trying both costs an extra request only on failure.
+    let text = '';
+    let status = 0;
+
+    for (const fresh of [false, true]) {
+      const response = await fetch(READER_ENDPOINT + url, {
+        signal,
+        headers: {
+          Accept: 'text/plain',
+          ...(fresh ? { 'x-no-cache': 'true' } : {}),
+        },
+      });
+      status = response.status;
+      if (!response.ok) continue;
+
+      text = await response.text();
+      if (!looksUnreadable(text)) break;
+      text = '';
+    }
+
+    if (!text) {
       return {
-        content: `Error: could not fetch ${url} (HTTP ${response.status}).`,
+        content: fetchFailed(
+          url,
+          status >= 400 ? `HTTP ${status}` : 'no readable content'
+        ),
         label,
       };
     }
 
-    const text = await response.text();
     if (text.length <= MAX_CONTENT_CHARS) return { content: text, label };
 
     return {
@@ -155,9 +223,6 @@ export const executeToolCall = async (
     };
   } catch (e) {
     if ((e as Error)?.name === 'AbortError') throw e;
-    return {
-      content: `Error: could not fetch ${url} (${(e as Error).message}).`,
-      label,
-    };
+    return { content: fetchFailed(url, (e as Error).message), label };
   }
 };
