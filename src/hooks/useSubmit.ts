@@ -26,6 +26,7 @@ import {
 } from '@api/api';
 import {
   parseEventSource,
+  foldAnthropicContent,
   parseAnthropicEventSource,
   parseOllamaStream,
 } from '@api/helper';
@@ -81,7 +82,9 @@ const useSubmit = () => {
           titleChatConfig,
           useStore.getState().apiKey || undefined
         );
-        const titleText = data.content[0]?.text;
+        // Not foldAnthropicContent: a title is the answer only — reasoning
+        // must never end up in the chat's name.
+        const titleText = data.content?.find((b) => b.type === 'text')?.text;
         if (!titleText)
           throw new Error(t('errors.failedToRetrieveData') as string);
         return titleText;
@@ -228,7 +231,10 @@ const useSubmit = () => {
             apiKey || undefined,
             signal
           );
-          if (!data?.content?.[0]?.text) {
+          // A reasoning model puts its thinking block first, so indexing
+          // content[0] for text would both miss the answer and throw.
+          const anthropicText = foldAnthropicContent(data?.content);
+          if (!anthropicText) {
             throw new Error(t('errors.failedToRetrieveData') as string);
           }
           const updatedChats: ChatInterface[] = JSON.parse(
@@ -238,7 +244,7 @@ const useSubmit = () => {
           (
             updatedMessages[updatedMessages.length - 1]
               .content[0] as TextContentInterface
-          ).text += data.content[0].text;
+          ).text += anthropicText;
           setChats(updatedChats);
         } else {
           // OpenAI non-streaming (unchanged)
@@ -449,10 +455,24 @@ const useSubmit = () => {
                 reading = false;
               }
 
-              const resultString = chunks.reduce(
-                (output: string, curr) => output + curr.delta.text,
-                ''
-              );
+              // Reasoning arrives as its own delta type here, so it gets the
+              // same `<think>` folding as the ollama and OpenAI paths.
+              let resultString = '';
+              for (const curr of chunks) {
+                if (curr.delta.type === 'thinking_delta') {
+                  if (!reasoningOpen) {
+                    resultString += '<think>';
+                    reasoningOpen = true;
+                  }
+                  resultString += curr.delta.thinking;
+                } else {
+                  if (reasoningOpen) {
+                    resultString += '</think>';
+                    reasoningOpen = false;
+                  }
+                  resultString += curr.delta.text;
+                }
+              }
 
               if (resultString) {
                 const updatedChats: ChatInterface[] = JSON.parse(

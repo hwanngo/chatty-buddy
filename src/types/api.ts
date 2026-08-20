@@ -45,12 +45,26 @@ export interface AnthropicTextBlock {
   text: string;
 }
 
+/**
+ * Extended-thinking block. Anthropic emits these only when the request asks
+ * for thinking, but Anthropic-compatible local servers (llama.cpp's
+ * `/v1/messages`, and the proxies in front of it) emit them for any reasoning
+ * model, unasked.
+ */
+export interface AnthropicThinkingBlock {
+  type: 'thinking';
+  thinking: string;
+  signature?: string;
+}
+
+export type AnthropicContentBlock = AnthropicTextBlock | AnthropicThinkingBlock;
+
 /** Shape returned by POST /v1/messages (non-streaming) */
 export interface AnthropicMessage {
   id: string;
   type: 'message';
   role: 'assistant';
-  content: AnthropicTextBlock[];
+  content: AnthropicContentBlock[];
   model: string;
   stop_reason: string | null;
   stop_sequence: string | null;
@@ -60,14 +74,13 @@ export interface AnthropicMessage {
   };
 }
 
-/** Single event from the Anthropic SSE stream with text content */
+/** Single event from the Anthropic SSE stream carrying text or reasoning */
 export interface AnthropicStreamContentBlockDelta {
   type: 'content_block_delta';
   index: number;
-  delta: {
-    type: 'text_delta';
-    text: string;
-  };
+  delta:
+    | { type: 'text_delta'; text: string }
+    | { type: 'thinking_delta'; thinking: string };
 }
 
 // ─── Ollama native API types ──────────────────────────────────────────────────
