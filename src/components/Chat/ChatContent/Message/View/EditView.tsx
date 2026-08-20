@@ -756,7 +756,7 @@ const InputToolbar = ({
     (webSearch ? 1 : 0) +
     (fetchUrl ? 1 : 0) +
     (apiType === 'ollama' && !think ? 1 : 0) +
-    (reasoningEffort ? 1 : 0) +
+    (apiType === 'openai' && reasoningEffort ? 1 : 0) +
     (hasImages && imageDetail !== 'auto' ? 1 : 0);
 
   const hasNonDefaults = chat
@@ -800,8 +800,11 @@ const InputToolbar = ({
 
   const handleCycleReasoningEffort = () => {
     if (!useStore.getState().chats) return;
+    // `null` and `'none'` are different requests: null omits the field and
+    // lets the server decide, 'none' actively asks it to stop reasoning.
     const order: Array<ReasoningEffort | null> = [
       null,
+      'none',
       'low',
       'medium',
       'high',
@@ -950,28 +953,35 @@ const InputToolbar = ({
                 </button>
               )}
 
-              {/* Reasoning — cycles None → Low → Medium → High */}
-              <button
-                type='button'
-                onClick={handleCycleReasoningEffort}
-                className='w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] text-[var(--fg)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer'
-              >
-                <span className='flex items-center gap-2'>
-                  <Icon name='sparkle' className='w-4 h-4' />
-                  {t('reasoningEffort.label')}
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${
-                    reasoningEffort
-                      ? 'border-[var(--accent)] text-[var(--accent)]'
-                      : 'border-[var(--border-mid)] text-[var(--fg-3)]'
-                  }`}
+              {/* Reasoning — OpenAI only: `reasoning_effort` is an OpenAI
+                  field. Anthropic's `/v1/messages` has no per-request way to
+                  switch reasoning off (llama-server ignores
+                  `thinking: {type: 'disabled'}`), and the ollama native body
+                  drops the field entirely in favour of `think`.
+                  Cycles Default → None → Low → Medium → High. */}
+              {apiType === 'openai' && (
+                <button
+                  type='button'
+                  onClick={handleCycleReasoningEffort}
+                  className='w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] text-[var(--fg)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer'
                 >
-                  {reasoningEffort
-                    ? t(`reasoningEffort.${reasoningEffort}`)
-                    : t('reasoningEffort.none')}
-                </span>
-              </button>
+                  <span className='flex items-center gap-2'>
+                    <Icon name='sparkle' className='w-4 h-4' />
+                    {t('reasoningEffort.label')}
+                  </span>
+                  <span
+                    className={`px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                      reasoningEffort
+                        ? 'border-[var(--accent)] text-[var(--accent)]'
+                        : 'border-[var(--border-mid)] text-[var(--fg-3)]'
+                    }`}
+                  >
+                    {reasoningEffort
+                      ? t(`reasoningEffort.${reasoningEffort}`)
+                      : t('reasoningEffort.default')}
+                  </span>
+                </button>
+              )}
 
               {/* Image detail — only when the message has images */}
               {hasImages && (

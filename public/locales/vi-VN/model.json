@@ -73,7 +73,8 @@
   "searchModels": "Tìm kiếm model…",
   "reasoningEffort": {
     "label": "Suy luận",
-    "description": "Kiểm soát mức độ suy nghĩ của model trước khi trả lời. Hỗ trợ OpenAI o1, o3, o4-mini và các reasoning model tương thích.",
+    "description": "Kiểm soát mức độ suy nghĩ của model trước khi trả lời. Chỉ áp dụng cho endpoint tương thích OpenAI. \"Mặc định\" không gửi gì và để server tự quyết; \"Không\" yêu cầu model ngừng suy luận.",
+    "default": "Mặc định",
     "none": "Không",
     "low": "Thấp",
     "medium": "Trung bình",

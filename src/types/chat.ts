@@ -90,7 +90,13 @@ export interface ChatInterface {
   imageDetail: ImageDetail;
 }
 
-export type ReasoningEffort = 'low' | 'medium' | 'high';
+/**
+ * `'none'` is a real value the server must see, not the absence of one.
+ * Measured against llama-server: `reasoning_effort: 'none'` suppresses
+ * reasoning, while `'low'` and an omitted field both leave it on — so
+ * "off" has to be sent, and `null` (don't send) is a separate state.
+ */
+export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 
 export interface ConfigInterface {
   model: ModelOptions;

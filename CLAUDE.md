@@ -51,6 +51,20 @@ What differs from the OpenAI path, all of it simpler:
 
 The `think` config field only reaches the model here, which is why its toggle is hidden on other protocols — showing it would promise something they cannot deliver.
 
+**Reasoning controls are per-protocol, and each is hidden where it does nothing.** There is no single "reasoning off" switch, because no two protocols spell it the same way. Measured against llama-server:
+
+| Protocol | Off switch | Result |
+|---|---|---|
+| ollama native | `think: false` | reasoning suppressed |
+| OpenAI | `reasoning_effort: 'none'` | reasoning suppressed |
+| OpenAI | `reasoning_effort: 'low'`, or field omitted | still reasons |
+| Anthropic | `thinking: {type: 'disabled'}` | still reasons — ignored by the server |
+| Anthropic | no parameter | still reasons |
+
+So `ReasoningEffort` includes `'none'` as a real value, and `null` is a *different* state meaning "send no field at all". They are not interchangeable: `api.ts` guards with `reasoningEffort ? {…} : {}`, so a `null` labelled "none" would silently send nothing and leave reasoning on — which is exactly the bug that shipped before. The chips read **Default → None → Low → Medium → High**, and `'none'` being truthy is what carries it to the wire. Widening the union needs no migration: every previously stored value is still valid.
+
+The Anthropic row is why no reasoning control is offered there at all. Nothing the client can send switches it off, so the only remedy is server-side (`--reasoning-budget 0`), and a control that cannot deliver is worse than an absent one.
+
 **Provider-hosted tools**: the web-search toggle sends `tools: [{type: 'web_search_preview'}]`, which is an *OpenAI-hosted* tool — it has no `function` block because the provider is meant to run it server-side. `api.ts` gates it behind `supportsOpenAIHostedTools` (`@utils/api`, host-exact match on `api.openai.com`) because advertising it to a gateway that can't invoke it is actively harmful, not merely ignored: given a prompt that obviously calls for search, such as a URL to summarise, the model can reason toward that unreachable tool until generation dies — no content, no finish reason, a UI that looks hung. Any new provider-hosted tool needs the same gate.
 
 **Client-executed tools** (`src/utils/tools.ts`, loop in `useSubmit.ts`): the `fetch_url` tool lets the model pull a web page into the conversation. Unlike `web_search_preview` it is an ordinary function tool — *this app* performs the work — which is the only shape that works against a local runtime.

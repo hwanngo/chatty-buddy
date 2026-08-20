@@ -73,7 +73,8 @@
   "searchModels": "Search models…",
   "reasoningEffort": {
     "label": "Reasoning",
-    "description": "Controls how much thinking the model does before responding. Supported by OpenAI o1, o3, o4-mini and compatible reasoning models.",
+    "description": "Controls how much thinking the model does before responding. OpenAI-compatible endpoints only. \"Default\" sends nothing and lets the server decide; \"None\" actively asks it to stop reasoning.",
+    "default": "Default",
     "none": "None",
     "low": "Low",
     "medium": "Medium",

@@ -45,6 +45,7 @@ const ChatConfigPopup = ({
   setIsModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) => {
   const config = useStore.getState().defaultChatConfig;
+  const apiType = useStore((state) => state.apiType);
   const setDefaultChatConfig = useStore((state) => state.setDefaultChatConfig);
   const setDefaultSystemMessage = useStore(
     (state) => state.setDefaultSystemMessage
@@ -212,7 +213,10 @@ const ChatConfigPopup = ({
           </div>
         </div>
 
-        {/* Thinking default */}
+        {/* Thinking default — ollama only, matching the in-chat control:
+            `think` is read solely by buildOllamaBody, so on any other
+            protocol this switch would change nothing. */}
+        {apiType === 'ollama' && (
         <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
           <div className='flex items-center justify-between'>
             <div>
@@ -240,8 +244,12 @@ const ChatConfigPopup = ({
             </button>
           </div>
         </div>
+        )}
 
-        {/* Reasoning Effort default */}
+        {/* Reasoning Effort default — OpenAI only, matching the in-chat
+            control. `reasoning_effort` is an OpenAI field; the Anthropic and
+            ollama bodies never carry it. */}
+        {apiType === 'openai' && (
         <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
           <label className='block text-sm font-medium text-[var(--fg)]'>
             {t('reasoningEffort.label')}
@@ -251,7 +259,9 @@ const ChatConfigPopup = ({
           </p>
           <div className='flex gap-2 flex-wrap'>
             {(
-              [null, 'low', 'medium', 'high'] as Array<ReasoningEffort | null>
+              [null, 'none', 'low', 'medium', 'high'] as Array<
+                ReasoningEffort | null
+              >
             ).map((opt) => (
               <button
                 key={String(opt)}
@@ -264,12 +274,13 @@ const ChatConfigPopup = ({
                 }`}
               >
                 {opt === null
-                  ? t('reasoningEffort.none')
+                  ? t('reasoningEffort.default')
                   : t(`reasoningEffort.${opt}`)}
               </button>
             ))}
           </div>
         </div>
+        )}
 
         <button
           type='button'
