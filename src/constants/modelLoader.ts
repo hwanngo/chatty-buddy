@@ -6,7 +6,6 @@ let modelMaxToken: { [key: string]: number } = {};
 let modelCost: ModelCost = {};
 let modelTypes: { [key: string]: string } = {};
 let modelStreamSupport: { [key: string]: boolean } = {};
-let modelDisplayNames: { [key: string]: string } = {};
 
 export let isModelsReady = false;
 const listeners = new Set<() => void>();
@@ -57,7 +56,6 @@ const runLoad = async (): Promise<void> => {
     modelCost = models.modelCost;
     modelTypes = models.modelTypes;
     modelStreamSupport = models.modelStreamSupport;
-    modelDisplayNames = models.modelDisplayNames;
     isModelsReady = true;
     loaded = true;
   } catch (err) {

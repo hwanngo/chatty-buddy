@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import useStore from '@store/store';
@@ -42,8 +41,11 @@ const NewFolder = () => {
   };
 
   return (
-    <a
-      className={`flex items-center justify-center rounded-lg border border-[var(--border-mid)] bg-[var(--bg-hover)] text-[var(--fg-2)] hover:bg-[var(--bg-sand)] hover:text-[var(--fg)] transition-colors duration-150 shrink-0 w-[34px] h-[34px] ${
+    <button
+      type='button'
+      disabled={generating}
+      aria-label={t('newFolder')}
+      className={`flex items-center justify-center rounded-lg border border-[var(--border-mid)] bg-[var(--bg-hover)] text-[var(--fg-2)] hover:bg-[var(--bg-sand)] hover:text-[var(--fg)] transition-colors duration-150 shrink-0 w-11 h-11 ${
         generating
           ? 'cursor-not-allowed opacity-40'
           : 'cursor-pointer opacity-100'
@@ -52,8 +54,8 @@ const NewFolder = () => {
         if (!generating) addFolder();
       }}
     >
-      <Icon name="newFolder" />
-    </a>
+      <Icon name='newFolder' />
+    </button>
   );
 };
 

@@ -12,7 +12,6 @@ import {
 } from '@utils/api';
 import { TOOL_DEFINITIONS } from '@utils/tools';
 import { assertSafeApiEndpoint } from '@utils/url';
-import { ModelOptions } from '@utils/modelReader';
 
 /**
  * fetch wrapper that turns opaque network failures (DNS, CORS, offline) into a
@@ -83,6 +82,14 @@ function convertMessagesForAnthropic(messages: MessageInterface[]): {
     // `tool` messages come from the OpenAI-side tool loop; Anthropic has no
     // equivalent wired up, and mapping one would emit an invalid role.
     .filter((m) => m.role !== 'system' && m.role !== 'tool')
+    .filter(
+      (m) =>
+        !(
+          m.role === 'assistant' &&
+          m.tool_calls &&
+          m.content.every((part) => part.type === 'text' && !part.text)
+        )
+    )
     .map((m) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content.map((block): Record<string, unknown> => {
@@ -128,7 +135,13 @@ function convertMessagesForAnthropic(messages: MessageInterface[]): {
  */
 const toApiMessages = (messages: MessageInterface[]) =>
   messages.map((message) => {
-    const { tool_name: _clientOnly, ...rest } = message;
+    const {
+      tool_name: _clientOnly,
+      id: _id,
+      generationStatus: _status,
+      generationError: _error,
+      ...rest
+    } = message;
     if (message.role !== 'tool') return rest;
     return {
       ...rest,
@@ -139,27 +152,64 @@ const toApiMessages = (messages: MessageInterface[]) =>
     };
   });
 
-/**
- * Assembles the `tools` array for a request. Two kinds, and the distinction is
- * what makes this worth a function:
- *
- * - `web_search_preview` is **provider-hosted**: it has no function body, and
- *   only OpenAI can execute it. Offered to anyone else it is not ignored but
- *   actively harmful — the model can reason toward a tool that never resolves
- *   until generation dies with no content. Hence the host gate.
- * - `fetch_url` is **client-executed**: this app runs it, so it works against
- *   any OpenAI-compatible endpoint, local ones included.
- */
-const buildTools = (
+/** Chat Completions search uses a specialized model, never Responses tools. */
+export const supportsChatSearchModel = (model: string): boolean =>
+  /^gpt-5-search-api(-\d{4}-\d{2}-\d{2})?$/.test(model);
+
+/** Explicit provider fields prevent client preferences reaching the wire. */
+export const buildOpenAIConfig = (
   endpoint: string,
-  webSearch?: boolean,
-  fetchUrl?: boolean
-) => [
-  ...(webSearch && supportsOpenAIHostedTools(endpoint)
-    ? [{ type: 'web_search_preview' }]
-    : []),
-  ...(fetchUrl ? TOOL_DEFINITIONS : []),
-];
+  config: ConfigInterface
+) => {
+  const {
+    model,
+    temperature,
+    top_p,
+    presence_penalty,
+    frequency_penalty,
+    reasoningEffort,
+  } = config;
+  if (
+    config.webSearch &&
+    (!supportsOpenAIHostedTools(endpoint) || !supportsChatSearchModel(model))
+  ) {
+    throw new Error(
+      'Web search requires the OpenAI gpt-5-search-api search model. Disable web search or choose that model.'
+    );
+  }
+  return {
+    model,
+    // Search models accept a narrower contract than ordinary chat models.
+    ...(!config.webSearch
+      ? { temperature, top_p, presence_penalty, frequency_penalty }
+      : {}),
+    ...(config.output_tokens
+      ? { max_completion_tokens: config.output_tokens }
+      : {}),
+    ...(config.fetchUrl ? { tools: TOOL_DEFINITIONS } : {}),
+    ...(config.webSearch ? { web_search_options: {} } : {}),
+    ...(reasoningEffort && !config.webSearch
+      ? { reasoning_effort: reasoningEffort }
+      : {}),
+  };
+};
+
+const azureChatEndpoint = (
+  endpoint: string,
+  model: string,
+  version = '2024-02-01'
+) => {
+  if (!isAzureEndpoint(endpoint)) return endpoint.trim();
+  const url = new URL(endpoint.trim());
+  if (
+    !/\/openai\/deployments\/[^/]+\/chat\/completions\/?$/.test(url.pathname)
+  ) {
+    const deployment = model.replace(/^gpt-3\.5-turbo/, 'gpt-35-turbo');
+    url.pathname = `/openai/deployments/${encodeURIComponent(deployment)}/chat/completions`;
+  }
+  url.searchParams.set('api-version', version);
+  return url.toString();
+};
 
 export const getChatCompletion = async (
   endpoint: string,
@@ -178,35 +228,14 @@ export const getChatCompletion = async (
 
   if (isAzureEndpoint(endpoint) && apiKey) {
     headers['api-key'] = apiKey;
-
-    const modelmapping: Partial<Record<ModelOptions, string>> = {
-      'gpt-3.5-turbo': 'gpt-35-turbo',
-      'gpt-3.5-turbo-16k': 'gpt-35-turbo-16k',
-      'gpt-3.5-turbo-1106': 'gpt-35-turbo-1106',
-      'gpt-3.5-turbo-0125': 'gpt-35-turbo-0125',
-    };
-
-    const model = modelmapping[config.model] || config.model;
-
-    const apiVersion = apiVersionToUse ?? '2024-02-01';
-
-    const path = `openai/deployments/${model}/chat/completions?api-version=${apiVersion}`;
-
-    if (!endpoint.endsWith(path)) {
-      if (!endpoint.endsWith('/')) {
-        endpoint += '/';
-      }
-      endpoint += path;
-    }
+    delete headers.Authorization;
   }
+  endpoint = azureChatEndpoint(endpoint, config.model, apiVersionToUse);
   endpoint = endpoint.trim();
   assertSafeApiEndpoint(endpoint);
 
-  // `webSearch`, `reasoningEffort` and `fetchUrl` are client-side switches,
-  // not model parameters — destructured out so `...apiConfig` can't leak them
-  // into the request body as unknown fields.
-  const { webSearch, reasoningEffort, fetchUrl, ...apiConfig } = config;
-  const tools = buildTools(endpoint, webSearch, fetchUrl);
+  // Send only fields belonging to the selected provider contract.
+  const apiConfig = buildOpenAIConfig(endpoint, config);
   const response = await safeFetch(endpoint, {
     method: 'POST',
     headers,
@@ -214,14 +243,15 @@ export const getChatCompletion = async (
     body: JSON.stringify({
       messages: toApiMessages(messages),
       ...apiConfig,
-      max_tokens: undefined,
-      ...(tools.length > 0 ? { tools } : {}),
-      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });
   if (!response.ok)
     throw new Error(
-      cleanErrorText(await response.text(), response.status, response.statusText)
+      cleanErrorText(
+        await response.text(),
+        response.status,
+        response.statusText
+      )
     );
 
   const data = await response.json();
@@ -245,31 +275,13 @@ export const getChatCompletionStream = async (
 
   if (isAzureEndpoint(endpoint) && apiKey) {
     headers['api-key'] = apiKey;
-
-    const modelmapping: Partial<Record<ModelOptions, string>> = {
-      'gpt-3.5-turbo': 'gpt-35-turbo',
-      'gpt-3.5-turbo-16k': 'gpt-35-turbo-16k',
-    };
-
-    const model = modelmapping[config.model] || config.model;
-
-    const apiVersion = apiVersionToUse ?? '2024-02-01';
-    const path = `openai/deployments/${model}/chat/completions?api-version=${apiVersion}`;
-
-    if (!endpoint.endsWith(path)) {
-      if (!endpoint.endsWith('/')) {
-        endpoint += '/';
-      }
-      endpoint += path;
-    }
+    delete headers.Authorization;
   }
+  endpoint = azureChatEndpoint(endpoint, config.model, apiVersionToUse);
   endpoint = endpoint.trim();
   assertSafeApiEndpoint(endpoint);
-  // `webSearch`, `reasoningEffort` and `fetchUrl` are client-side switches,
-  // not model parameters — destructured out so `...apiConfig` can't leak them
-  // into the request body as unknown fields.
-  const { webSearch, reasoningEffort, fetchUrl, ...apiConfig } = config;
-  const tools = buildTools(endpoint, webSearch, fetchUrl);
+  // Send only fields belonging to the selected provider contract.
+  const apiConfig = buildOpenAIConfig(endpoint, config);
   const response = await safeFetch(endpoint, {
     method: 'POST',
     headers,
@@ -277,10 +289,7 @@ export const getChatCompletionStream = async (
     body: JSON.stringify({
       messages: toApiMessages(messages),
       ...apiConfig,
-      max_tokens: undefined,
       stream: true,
-      ...(tools.length > 0 ? { tools } : {}),
-      ...(reasoningEffort ? { reasoning_effort: reasoningEffort } : {}),
     }),
   });
   if (response.status === 404 || response.status === 405) {
@@ -324,6 +333,7 @@ export const getAnthropicChatCompletion = async (
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
   };
   if (apiKey) headers['x-api-key'] = apiKey;
 
@@ -332,7 +342,7 @@ export const getAnthropicChatCompletion = async (
 
   const body: Record<string, unknown> = {
     model: config.model,
-    max_tokens: config.max_tokens,
+    max_tokens: config.output_tokens ?? 4096,
     messages: convertedMessages,
     ...(config.temperature !== undefined && {
       temperature: config.temperature,
@@ -351,7 +361,11 @@ export const getAnthropicChatCompletion = async (
 
   if (!response.ok)
     throw new Error(
-      cleanErrorText(await response.text(), response.status, response.statusText)
+      cleanErrorText(
+        await response.text(),
+        response.status,
+        response.statusText
+      )
     );
   return response.json() as Promise<AnthropicMessage>;
 };
@@ -366,6 +380,7 @@ export const getAnthropicChatCompletionStream = async (
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     'anthropic-version': '2023-06-01',
+    'anthropic-dangerous-direct-browser-access': 'true',
   };
   if (apiKey) headers['x-api-key'] = apiKey;
 
@@ -374,7 +389,7 @@ export const getAnthropicChatCompletionStream = async (
 
   const body: Record<string, unknown> = {
     model: config.model,
-    max_tokens: config.max_tokens,
+    max_tokens: config.output_tokens ?? 4096,
     messages: convertedMessages,
     stream: true,
     ...(config.temperature !== undefined && {
@@ -394,7 +409,11 @@ export const getAnthropicChatCompletionStream = async (
 
   if (!response.ok)
     throw new Error(
-      cleanErrorText(await response.text(), response.status, response.statusText)
+      cleanErrorText(
+        await response.text(),
+        response.status,
+        response.statusText
+      )
     );
 
   if (!response.body) {
@@ -472,7 +491,7 @@ const buildOllamaBody = (
   config: ConfigInterface,
   stream: boolean
 ) => {
-  const { webSearch, reasoningEffort, fetchUrl, think, model, ...rest } = config;
+  const { fetchUrl, think, model } = config;
   return {
     model,
     messages: toOllamaMessages(messages),
@@ -481,10 +500,11 @@ const buildOllamaBody = (
     ...(fetchUrl ? { tools: TOOL_DEFINITIONS } : {}),
     // Sampling parameters live under `options` natively, not at the top level.
     options: {
-      temperature: rest.temperature,
-      top_p: rest.top_p,
-      frequency_penalty: rest.frequency_penalty,
-      presence_penalty: rest.presence_penalty,
+      ...(config.output_tokens ? { num_predict: config.output_tokens } : {}),
+      temperature: config.temperature,
+      top_p: config.top_p,
+      frequency_penalty: config.frequency_penalty,
+      presence_penalty: config.presence_penalty,
     },
   };
 };
@@ -510,7 +530,11 @@ export const getOllamaChatCompletion = async (
   });
   if (!response.ok)
     throw new Error(
-      cleanErrorText(await response.text(), response.status, response.statusText)
+      cleanErrorText(
+        await response.text(),
+        response.status,
+        response.statusText
+      )
     );
   return await response.json();
 };
@@ -536,7 +560,11 @@ export const getOllamaChatCompletionStream = async (
   });
   if (!response.ok)
     throw new Error(
-      cleanErrorText(await response.text(), response.status, response.statusText)
+      cleanErrorText(
+        await response.text(),
+        response.status,
+        response.statusText
+      )
     );
   return response.body;
 };

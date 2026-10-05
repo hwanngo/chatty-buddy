@@ -60,7 +60,8 @@
   "tools": "Tools",
   "webSearch": {
     "label": "Web Search",
-    "description": "Allow the model to search the web for up-to-date information. Supported by OpenAI gpt-4o, gpt-4.1 and compatible endpoints."
+    "description": "Allow the model to search the web for up-to-date information. Supported by OpenAI gpt-4o, gpt-4.1 and compatible endpoints.",
+    "unsupported": "Web search requires the official OpenAI endpoint and gpt-5-search-api."
   },
   "fetchUrl": {
     "label": "Fetch URLs",
@@ -79,5 +80,10 @@
     "low": "Low",
     "medium": "Medium",
     "high": "High"
+  },
+  "estimateNote": "Estimates may differ from provider billing. Image pricing is unavailable.",
+  "outputTokens": {
+    "label": "Limit output tokens",
+    "description": "Separate from the history budget. When disabled, Anthropic uses 4096; OpenAI/Ollama use the server default."
   }
 }

@@ -60,7 +60,8 @@
   "tools": "Công cụ",
   "webSearch": {
     "label": "Tìm kiếm web",
-    "description": "Cho phép model tìm kiếm web để lấy thông tin mới nhất. Hỗ trợ OpenAI gpt-4o, gpt-4.1 và các endpoint tương thích."
+    "description": "Cho phép model tìm kiếm web để lấy thông tin mới nhất. Hỗ trợ OpenAI gpt-4o, gpt-4.1 và các endpoint tương thích.",
+    "unsupported": "Tìm kiếm trên web cần API OpenAI chính thức và mô hình gpt-5-search-api."
   },
   "fetchUrl": {
     "label": "Tải nội dung URL",
@@ -79,5 +80,10 @@
     "low": "Thấp",
     "medium": "Trung bình",
     "high": "Cao"
+  },
+  "estimateNote": "Ước tính có thể khác hóa đơn nhà cung cấp. Chưa có giá ảnh.",
+  "outputTokens": {
+    "label": "Giới hạn token đầu ra",
+    "description": "Tách biệt với ngân sách lịch sử. Nếu tắt, Anthropic dùng 4096; OpenAI/Ollama dùng mặc định máy chủ."
   }
 }

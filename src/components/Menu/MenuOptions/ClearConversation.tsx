@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useStore from '@store/store';
 
@@ -28,7 +28,7 @@ const ClearConversation = () => {
         }}
         aria-label={t('clearConversation') as string}
       >
-        <Icon name="delete" />
+        <Icon name='delete' />
         {t('clearConversation')}
       </button>
       {isModalOpen && (

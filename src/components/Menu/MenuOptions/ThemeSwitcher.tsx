@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import useStore from '@store/store';
 import Icon from '@components/Icon';
@@ -30,7 +30,7 @@ const ThemeSwitcher = () => {
       onClick={switchTheme}
       aria-label='toggle dark/light mode'
     >
-      {theme === 'dark' ? <Icon name="sun" /> : <Icon name="moon" />}
+      {theme === 'dark' ? <Icon name='sun' /> : <Icon name='moon' />}
       {t(getOppositeTheme(theme) + 'Mode')}
     </button>
   ) : (

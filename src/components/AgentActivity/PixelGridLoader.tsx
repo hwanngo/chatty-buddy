@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 /**
@@ -12,7 +12,15 @@ import { useTranslation } from 'react-i18next';
  * values look shuffled here while tracing a clean circle on screen.
  */
 const CELL_DELAYS: (number | null)[] = [
-  0, 0.11, 0.22, 0.77, null, 0.33, 0.66, 0.55, 0.44,
+  0,
+  0.11,
+  0.22,
+  0.77,
+  null,
+  0.33,
+  0.66,
+  0.55,
+  0.44,
 ];
 
 /**

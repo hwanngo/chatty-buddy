@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useStore from '@store/store';
@@ -14,7 +13,7 @@ const MarkdownModeButton = () => {
 
   return (
     <BaseButton
-      icon={markdownMode ? <Icon name="markdown" /> : <Icon name="fileText" />}
+      icon={markdownMode ? <Icon name='markdown' /> : <Icon name='fileText' />}
       buttonProps={{
         'aria-label': 'toggle markdown mode',
         'title': t('toggleMarkdown'),

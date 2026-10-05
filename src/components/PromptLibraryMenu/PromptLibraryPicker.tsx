@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
@@ -46,6 +46,7 @@ const PromptLibraryPicker = ({
         onClick={() => setDropDown(!dropDown)}
         className='text-xs px-2 py-1 rounded-md border border-[var(--border-mid)] text-[var(--fg-2)] hover:bg-[var(--bg-hover)] hover:text-[var(--fg)] transition-colors duration-150 cursor-pointer'
         aria-label={t('promptLibrary') as string}
+        aria-expanded={dropDown}
       >
         {t('promptLibrary')}
       </button>
@@ -54,10 +55,17 @@ const PromptLibraryPicker = ({
         ReactDOM.createPortal(
           <div
             onMouseDown={(e) => e.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.stopPropagation();
+                setDropDown(false);
+                buttonRef.current?.focus();
+              }
+            }}
             style={{
               position: 'fixed',
               top: rect.bottom + 4,
-              left: rect.left,
+              left: Math.max(8, Math.min(rect.left, window.innerWidth - 360)),
               zIndex: 9999,
             }}
             className='bg-[var(--bg-card)] rounded-lg shadow-[var(--shadow-float)] border border-[var(--border-mid)] text-[var(--fg)]'
@@ -69,6 +77,7 @@ const PromptLibraryPicker = ({
                 className='text-[var(--fg)] px-4 py-2.5 text-sm border-none bg-transparent m-0 w-full focus:outline-none placeholder:text-[var(--fg-3)]'
                 value={input}
                 placeholder={t('search') as string}
+                aria-label={t('search')}
                 onChange={(e) => setInput(e.target.value)}
               />
             </div>
@@ -79,15 +88,17 @@ const PromptLibraryPicker = ({
                 </li>
               )}
               {_prompts.map((cp) => (
-                <li
-                  key={cp.id}
-                  className='px-4 py-2 hover:bg-[var(--bg-hover)] cursor-pointer text-start w-full'
-                  onClick={() => {
-                    onSelect(cp.prompt);
-                    setDropDown(false);
-                  }}
-                >
-                  {cp.name}
+                <li key={cp.id}>
+                  <button
+                    type='button'
+                    className='px-4 py-2 hover:bg-[var(--bg-hover)] cursor-pointer text-start w-full'
+                    onClick={() => {
+                      onSelect(cp.prompt);
+                      setDropDown(false);
+                    }}
+                  >
+                    {cp.name}
+                  </button>
                 </li>
               ))}
             </ul>

@@ -7,16 +7,21 @@ import BaseButton from './BaseButton';
 
 const DownButton = ({
   onClick,
+  disabled = false,
+  disabledReason,
 }: {
   onClick: React.MouseEventHandler<HTMLButtonElement>;
+  disabled?: boolean;
+  disabledReason?: string;
 }) => {
   const { t } = useTranslation();
   return (
     <BaseButton
-      icon={<Icon name="downChevronArrow" />}
+      icon={<Icon name='downChevronArrow' />}
       buttonProps={{
+        disabled,
         'aria-label': 'shift message down',
-        'title': t('moveDown'),
+        'title': disabledReason ?? t('moveDown'),
       }}
       onClick={onClick}
     />

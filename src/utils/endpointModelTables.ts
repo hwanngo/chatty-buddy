@@ -30,12 +30,6 @@ const priceOf = (value: string): number => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const zeroCost = () => ({
-  prompt: { price: 0, unit: 1 },
-  completion: { price: 0, unit: 1 },
-  image: { price: 0, unit: 1 },
-});
-
 /**
  * Turns the ids an endpoint reports into the lookup tables the picker consumes.
  * Metadata precedence: the user's own custom model, then a catalog entry with a
@@ -118,7 +112,7 @@ export const buildEndpointModelTables = ({
     }
 
     tables.modelMaxToken[id] = DEFAULT_CONTEXT_LENGTH;
-    tables.modelCost[id] = zeroCost();
+    // An unlisted price is unknown, not a free model.
     // Optimistic, like the streaming default above: an id nobody has heard of
     // is typically a locally served model, and local vision models (llava,
     // qwen2.5-vl, gemma3) are a motivating case for endpoint-sourced lists.

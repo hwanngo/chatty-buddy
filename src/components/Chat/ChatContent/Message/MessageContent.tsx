@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import useStore from '@store/store';
+import { useState } from 'react';
 
 import ContentView from './View/ContentView';
 import EditView from './View/EditView';
@@ -22,7 +21,6 @@ const MessageContent = ({
   priorSteps?: TimelineStep[];
 }) => {
   const [isEdit, setIsEdit] = useState<boolean>(sticky);
-  const advancedMode = useStore((state) => state.advancedMode);
 
   return (
     <div className='relative flex flex-col gap-2 md:gap-3 w-full'>

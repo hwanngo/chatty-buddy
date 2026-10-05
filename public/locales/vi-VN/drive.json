@@ -1,16 +1,17 @@
 {
-  "name": "Đồng bộ Google",
-  "tagline": "Đồng bộ các cuộc trò chuyện và cài đặt của bạn với Google Drive.",
+  "name": "Sao lưu Google Drive",
+  "tagline": "Lưu các bản sao cuộc trò chuyện và cài đặt trên Google Drive.",
   "button": {
-    "sync": "Đồng bộ cuộc trò chuyện",
-    "stop": "Dừng đồng bộ",
-    "create": "Tạo file mới",
-    "confirm": "Xác nhận lựa chọn"
+    "sync": "Kết nối sao lưu",
+    "stop": "Ngắt kết nối",
+    "create": "Tạo bản sao",
+    "confirm": "Khôi phục bản đã chọn"
   },
-  "notice": "Lưu ý: Bạn sẽ cần đăng nhập lại sau mỗi lần truy cập hoặc sau mỗi giờ. Để tránh dữ liệu bị ghi đè, không sử dụng Chatty Buddy trên nhiều thiết bị cùng một lúc.",
-  "privacy": "Quyền riêng tư của bạn là ưu tiên hàng đầu. Chatty Buddy chỉ có quyền truy cập giới hạn — chỉ có thể tạo, xem và quản lý các file và thư mục của chính nó.",
+  "notice": "Kết nối lại khi mã truy cập hết hạn. Ngắt kết nối giữ nguyên dữ liệu cục bộ. Khi khôi phục, cuộc trò chuyện được hợp nhất; máy chủ API, khóa và tùy chọn cục bộ được giữ nguyên.",
+  "privacy": "Cuộc trò chuyện được gửi đến Google. Quyền drive.file giới hạn truy cập vào tệp được cấp quyền cho ứng dụng. Khóa API và máy chủ API không nằm trong bản sao.",
   "toast": {
     "sync": "Đồng bộ thành công!",
     "stop": "Đã dừng đồng bộ"
-  }
+  },
+  "snapshotsNotice": "Mỗi lần sao lưu tạo một bản chụp mới, không ghi đè bản cũ. Các bản chụp được giữ lại cho đến khi bạn xóa chúng trong Drive."
 }

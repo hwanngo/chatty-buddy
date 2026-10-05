@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useStore from '@store/store';
@@ -30,7 +29,7 @@ const MobileBar = () => {
         }}
         aria-label={t('openSidebar')}
       >
-        <Icon name="menu" />
+        <Icon name='menu' />
       </button>
       <h1 className='flex-1 text-center text-base font-normal px-2 max-h-20 overflow-y-auto'>
         {chatTitle}
@@ -48,7 +47,7 @@ const MobileBar = () => {
         }}
         aria-label={t('newChat')}
       >
-        <Icon name="plus" className='h-6 w-6' />
+        <Icon name='plus' className='h-6 w-6' />
       </button>
     </div>
   );

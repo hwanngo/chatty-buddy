@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
 
@@ -86,21 +86,21 @@ const PromptLibraryMenuPopUp = ({
     e.target.style.maxHeight = '2.5rem';
   };
 
-  useEffect(() => {
-    _setPrompts(prompts);
-  }, [prompts]);
-
   return (
     <Dialog
       title={t('promptLibrary') as string}
       setIsModalOpen={setIsModalOpen}
       handleConfirm={handleSave}
     >
-      <div className='w-[90vw] max-w-2xl text-sm text-[var(--fg)]'>
+      <div className='w-full max-w-2xl text-sm text-[var(--fg)]'>
         {/* Import / Export */}
         <div className='flex flex-col gap-5 px-6 py-5 border-b border-[var(--border-mid)]'>
-          <ImportPrompt />
-          <ExportPrompt />
+          <ImportPrompt
+            onImport={(imported) =>
+              _setPrompts((draft) => [...draft, ...imported])
+            }
+          />
+          <ExportPrompt prompts={_prompts} />
         </div>
 
         {/* Prompt table */}
@@ -121,12 +121,13 @@ const PromptLibraryMenuPopUp = ({
                   onBlur={handleOnBlur}
                   onChange={(e) => {
                     _setPrompts((prev) => {
-                      const newPrompts = [...prev];
-                      newPrompts[index].name = e.target.value;
-                      return newPrompts;
+                      return prev.map((item, i) =>
+                        i === index ? { ...item, name: e.target.value } : item
+                      );
                     });
                   }}
                   onInput={handleInput}
+                  aria-label={`${t('name')} ${index + 1}`}
                   value={prompt.name}
                   rows={1}
                 ></textarea>
@@ -138,12 +139,13 @@ const PromptLibraryMenuPopUp = ({
                   onBlur={handleOnBlur}
                   onChange={(e) => {
                     _setPrompts((prev) => {
-                      const newPrompts = [...prev];
-                      newPrompts[index].prompt = e.target.value;
-                      return newPrompts;
+                      return prev.map((item, i) =>
+                        i === index ? { ...item, prompt: e.target.value } : item
+                      );
                     });
                   }}
                   onInput={handleInput}
+                  aria-label={`${t('prompt')} ${index + 1}`}
                   value={prompt.prompt}
                   rows={1}
                 ></textarea>
@@ -153,7 +155,7 @@ const PromptLibraryMenuPopUp = ({
                 onClick={() => deletePrompt(index)}
                 aria-label='delete prompt'
               >
-                <Icon name="cross" />
+                <Icon name='cross' />
               </button>
             </div>
           ))}
@@ -163,7 +165,7 @@ const PromptLibraryMenuPopUp = ({
             onClick={addPrompt}
             aria-label='add prompt'
           >
-            <Icon name="plus" />
+            <Icon name='plus' />
           </button>
 
           <div className='flex items-center justify-between mt-3 pt-3 border-t border-[var(--border-mid)]'>

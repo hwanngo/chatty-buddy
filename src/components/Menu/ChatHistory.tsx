@@ -1,3 +1,5 @@
+import { v4 as uuidv4 } from 'uuid';
+import { createChatExport } from '@utils/import';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -24,8 +26,6 @@ const ChatHistory = React.memo(
     chatSize,
     selectedChats,
     setSelectedChats,
-    lastSelectedIndex,
-    setLastSelectedIndex,
   }: {
     title: string;
     chatIndex: number;
@@ -57,6 +57,7 @@ const ChatHistory = React.memo(
     };
 
     const deleteChat = () => {
+      if (useStore.getState().generating) return;
       const updatedChats = JSON.parse(
         JSON.stringify(useStore.getState().chats)
       );
@@ -96,34 +97,11 @@ const ChatHistory = React.memo(
       setIsEdit(false);
     };
 
-    const handleDragStart = (e: React.DragEvent<HTMLAnchorElement>) => {
+    const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
       if (e.dataTransfer) {
         const chatIndices =
           selectedChats.length > 0 ? selectedChats : [chatIndex];
         e.dataTransfer.setData('chatIndices', JSON.stringify(chatIndices));
-      }
-    };
-
-    const handleCheckboxClick = (e: React.MouseEvent<HTMLInputElement>) => {
-      if (e.shiftKey && lastSelectedIndex !== null) {
-        const start = Math.min(lastSelectedIndex, chatIndex);
-        const end = Math.max(lastSelectedIndex, chatIndex);
-        const newSelectedChats = [...selectedChats];
-        for (let i = start; i <= end; i++) {
-          if (!newSelectedChats.includes(i)) {
-            newSelectedChats.push(i);
-          }
-        }
-        setSelectedChats(newSelectedChats);
-      } else {
-        if (selectedChats.includes(chatIndex)) {
-          setSelectedChats(
-            selectedChats.filter((index) => index !== chatIndex)
-          );
-        } else {
-          setSelectedChats([...selectedChats, chatIndex]);
-        }
-        setLastSelectedIndex(chatIndex);
       }
     };
 
@@ -140,12 +118,16 @@ const ChatHistory = React.memo(
       e?.stopPropagation();
       const chats = useStore.getState().chats;
       if (chats?.[chatIndex]) {
-        downloadFile(chats[chatIndex], chats[chatIndex].title);
+        downloadFile(
+          createChatExport([chats[chatIndex]], useStore.getState().folders),
+          chats[chatIndex].title
+        );
       }
     };
 
     const handleClone = (e?: React.MouseEvent<HTMLButtonElement>) => {
       e?.stopPropagation();
+      if (useStore.getState().generating) return;
       const chats = useStore.getState().chats;
       if (chats) {
         const index = chatIndex;
@@ -158,6 +140,7 @@ const ChatHistory = React.memo(
 
         const clonedChat = JSON.parse(JSON.stringify(chats[index]));
         clonedChat.title = title;
+        clonedChat.id = uuidv4();
 
         const updatedChats: ChatInterface[] = JSON.parse(JSON.stringify(chats));
         updatedChats.unshift(clonedChat);
@@ -174,7 +157,12 @@ const ChatHistory = React.memo(
     const [isHovered, setIsHovered] = useState<boolean>(false);
 
     return (
-      <a
+      <div
+        onFocus={() => setIsHovered(true)}
+        onBlur={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget))
+            setIsHovered(false);
+        }}
         className={`relative ${
           active ? ChatHistoryClass.active : ChatHistoryClass.normal
         } ${
@@ -187,15 +175,13 @@ const ChatHistory = React.memo(
         }}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        draggable
+        draggable={!generating}
         onDragStart={handleDragStart}
       >
         <span
-          className={
-            active ? 'text-[var(--accent)]' : 'text-[var(--fg-2)]'
-          }
+          className={active ? 'text-[var(--accent)]' : 'text-[var(--fg-2)]'}
         >
-          <Icon name="chat" />
+          <Icon name='chat' />
         </span>
         <div
           className={`flex-1 overflow-hidden text-ellipsis whitespace-nowrap relative text-[13px] ${
@@ -206,6 +192,7 @@ const ChatHistory = React.memo(
           {isEdit ? (
             <input
               type='text'
+              aria-label={t('rename')}
               className='focus:outline-[var(--focus)] text-[13px] border-none bg-transparent p-0 m-0 w-full'
               value={_title}
               onChange={(e) => {
@@ -215,7 +202,15 @@ const ChatHistory = React.memo(
               ref={inputRef}
             />
           ) : (
-            `${title}${chatSize ? ` (${formatNumber(chatSize)})` : ''}`
+            <button
+              type='button'
+              disabled={generating}
+              aria-current={active ? 'page' : undefined}
+              className='text-left w-full truncate'
+              onClick={() => setCurrentChatIndex(chatIndex)}
+            >
+              {`${title}${chatSize ? ` (${formatNumber(chatSize)})` : ''}`}
+            </button>
           )}
         </div>
         {(active || isHovered) && (
@@ -228,7 +223,7 @@ const ChatHistory = React.memo(
                   aria-label='confirm'
                   title={t('confirm')}
                 >
-                  <Icon name="tick" />
+                  <Icon name='tick' />
                 </button>
                 <button
                   className='tap-target p-1 hover:text-[var(--fg)] cursor-pointer'
@@ -236,7 +231,7 @@ const ChatHistory = React.memo(
                   aria-label='cancel'
                   title={t('cancel')}
                 >
-                  <Icon name="cross" />
+                  <Icon name='cross' />
                 </button>
               </>
             ) : (
@@ -276,7 +271,7 @@ const ChatHistory = React.memo(
             )}
           </div>
         )}
-      </a>
+      </div>
     );
   }
 );

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Icon from '@components/Icon';
@@ -19,7 +19,7 @@ const ImportExportChat = () => {
           setIsModalOpen(true);
         }}
       >
-        <Icon name="export" className='w-4 h-4' />
+        <Icon name='export' className='w-4 h-4' />
         {t('import')} / {t('export')}
       </button>
       {isModalOpen && (

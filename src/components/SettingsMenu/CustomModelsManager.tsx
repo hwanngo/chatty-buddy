@@ -48,6 +48,11 @@ const CustomModelsManager = () => {
           instruct_type: null,
         },
         context_length: contextLength,
+        top_provider: {
+          context_length: contextLength,
+          max_completion_tokens: maxCompletionTokens,
+          is_moderated: false,
+        },
         pricing: pricing,
         is_stream_supported: isStreamSupported,
       });
@@ -79,7 +84,7 @@ const CustomModelsManager = () => {
           title={t('customModels.title') || ''}
           cancelButton={true}
         >
-          <div className='w-[min(90vw,28rem)] text-sm text-[var(--fg)]'>
+          <div className='w-full text-sm text-[var(--fg)]'>
             {/* Add model form */}
             <div className='px-6 py-5 border-b border-[var(--border-mid)]'>
               <form onSubmit={handleSubmit} className='flex flex-col gap-4'>
@@ -90,6 +95,8 @@ const CustomModelsManager = () => {
                   <input
                     type='text'
                     placeholder={t('customModels.modelId') || ''}
+                    aria-label={t('customModels.modelId')}
+                    required
                     value={newModelId}
                     onChange={(e) => setNewModelId(e.target.value)}
                     className={inputClass}
@@ -103,6 +110,8 @@ const CustomModelsManager = () => {
                   <input
                     type='text'
                     placeholder={t('customModels.modelName') || ''}
+                    aria-label={t('customModels.modelName')}
+                    required
                     value={newModelName}
                     onChange={(e) => setNewModelName(e.target.value)}
                     className={inputClass}
@@ -146,6 +155,7 @@ const CustomModelsManager = () => {
                   <button
                     type='button'
                     role='switch'
+                    aria-label={t('customModels.streamSupported')}
                     aria-checked={isStreamSupported}
                     onClick={() => setIsStreamSupported(!isStreamSupported)}
                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
@@ -184,6 +194,9 @@ const CustomModelsManager = () => {
                       </label>
                       <input
                         type='number'
+                        aria-label={t('customModels.contextLength')}
+                        required
+                        min={1}
                         value={contextLength}
                         onChange={(e) =>
                           setContextLength(Number(e.target.value))
@@ -198,6 +211,9 @@ const CustomModelsManager = () => {
                       </label>
                       <input
                         type='number'
+                        aria-label={t('customModels.maxCompletionTokens')}
+                        required
+                        min={1}
                         value={maxCompletionTokens}
                         onChange={(e) =>
                           setMaxCompletionTokens(Number(e.target.value))
@@ -217,7 +233,9 @@ const CustomModelsManager = () => {
                           </label>
                           <input
                             type='number'
-                            step='0.000001'
+                            step='any'
+                            aria-label={t('customModels.promptPrice')}
+                            min={0}
                             value={pricing.prompt}
                             onChange={(e) =>
                               setPricing({ ...pricing, prompt: e.target.value })
@@ -231,7 +249,9 @@ const CustomModelsManager = () => {
                           </label>
                           <input
                             type='number'
-                            step='0.000001'
+                            step='any'
+                            aria-label={t('customModels.completionPrice')}
+                            min={0}
                             value={pricing.completion}
                             onChange={(e) =>
                               setPricing({
@@ -248,7 +268,9 @@ const CustomModelsManager = () => {
                           </label>
                           <input
                             type='number'
-                            step='0.000001'
+                            step='any'
+                            aria-label={t('customModels.imagePrice')}
+                            min={0}
                             value={pricing.image}
                             onChange={(e) =>
                               setPricing({ ...pricing, image: e.target.value })
@@ -262,7 +284,9 @@ const CustomModelsManager = () => {
                           </label>
                           <input
                             type='number'
-                            step='0.000001'
+                            step='any'
+                            aria-label={t('customModels.requestPrice')}
+                            min={0}
                             value={pricing.request}
                             onChange={(e) =>
                               setPricing({
@@ -307,9 +331,7 @@ const CustomModelsManager = () => {
                         <p className='text-sm font-medium text-[var(--fg)]'>
                           {model.name}
                         </p>
-                        <p className='text-xs text-[var(--fg-3)]'>
-                          {model.id}
-                        </p>
+                        <p className='text-xs text-[var(--fg-3)]'>{model.id}</p>
                       </div>
                       <button
                         onClick={() => removeCustomModel(model.id)}

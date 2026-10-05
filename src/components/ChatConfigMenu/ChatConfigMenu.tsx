@@ -2,9 +2,12 @@ import React, { useState } from 'react';
 import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
 
+import { supportsChatSearchModel } from '@api/api';
+import { supportsOpenAIHostedTools } from '@utils/api';
 import Dialog from '@components/Dialog';
 import PromptLibraryPicker from '@components/PromptLibraryMenu/PromptLibraryPicker';
 import {
+  OutputTokenInput,
   FrequencyPenaltySlider,
   ImageDetailSelector,
   MaxTokenSlider,
@@ -46,6 +49,7 @@ const ChatConfigPopup = ({
 }) => {
   const config = useStore.getState().defaultChatConfig;
   const apiType = useStore((state) => state.apiType);
+  const apiEndpoint = useStore((state) => state.apiEndpoint);
   const setDefaultChatConfig = useStore((state) => state.setDefaultChatConfig);
   const setDefaultSystemMessage = useStore(
     (state) => state.setDefaultSystemMessage
@@ -58,6 +62,9 @@ const ChatConfigPopup = ({
     useStore.getState().defaultSystemMessage
   );
   const [_model, _setModel] = useState<ModelOptions>(config.model);
+  const [outputTokens, setOutputTokens] = useState<number | undefined>(
+    config.output_tokens
+  );
   const [_maxToken, _setMaxToken] = useState<number>(config.max_tokens);
   const [_temperature, _setTemperature] = useState<number>(config.temperature);
   const [_topP, _setTopP] = useState<number>(config.top_p);
@@ -82,6 +89,8 @@ const ChatConfigPopup = ({
 
   const handleSave = () => {
     setDefaultChatConfig({
+      ...config,
+      output_tokens: outputTokens,
       model: _model,
       max_tokens: _maxToken,
       temperature: _temperature,
@@ -99,6 +108,7 @@ const ChatConfigPopup = ({
   };
 
   const handleReset = () => {
+    setOutputTokens(_defaultChatConfig.output_tokens);
     _setModel(_defaultChatConfig.model);
     _setMaxToken(_defaultChatConfig.max_tokens);
     _setTemperature(_defaultChatConfig.temperature);
@@ -137,6 +147,7 @@ const ChatConfigPopup = ({
           _setMaxToken={_setMaxToken}
           _model={_model}
         />
+        <OutputTokenInput value={outputTokens} onChange={setOutputTokens} />
         <TemperatureSlider
           _temperature={_temperature}
           _setTemperature={_setTemperature}
@@ -163,12 +174,21 @@ const ChatConfigPopup = ({
                 {t('webSearch.label')}
               </label>
               <p className='mt-1 text-xs text-[var(--fg-3)]'>
-                {t('webSearch.description')}
+                {t('webSearch.description')} {t('webSearch.unsupported')}
               </p>
             </div>
             <button
               type='button'
               role='switch'
+              aria-label={t('webSearch.label')}
+              disabled={
+                !_webSearch &&
+                !(
+                  apiType === 'openai' &&
+                  supportsOpenAIHostedTools(apiEndpoint) &&
+                  supportsChatSearchModel(_model)
+                )
+              }
               aria-checked={_webSearch}
               onClick={() => _setWebSearch((v) => !v)}
               className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
@@ -198,6 +218,7 @@ const ChatConfigPopup = ({
             <button
               type='button'
               role='switch'
+              aria-label={t('fetchUrl.label')}
               aria-checked={_fetchUrl}
               onClick={() => _setFetchUrl((v) => !v)}
               className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
@@ -217,69 +238,74 @@ const ChatConfigPopup = ({
             `think` is read solely by buildOllamaBody, so on any other
             protocol this switch would change nothing. */}
         {apiType === 'ollama' && (
-        <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
-          <div className='flex items-center justify-between'>
-            <div>
-              <label className='block text-sm font-medium text-[var(--fg)]'>
-                {t('think.label')}
-              </label>
-              <p className='mt-1 text-xs text-[var(--fg-3)]'>
-                {t('think.description')}
-              </p>
-            </div>
-            <button
-              type='button'
-              role='switch'
-              aria-checked={_think}
-              onClick={() => _setThink((v) => !v)}
-              className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
-                _think ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sand)]'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  _think ? 'translate-x-6' : 'translate-x-1'
+          <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
+            <div className='flex items-center justify-between'>
+              <div>
+                <label className='block text-sm font-medium text-[var(--fg)]'>
+                  {t('think.label')}
+                </label>
+                <p className='mt-1 text-xs text-[var(--fg-3)]'>
+                  {t('think.description')}
+                </p>
+              </div>
+              <button
+                type='button'
+                role='switch'
+                aria-label={t('think.label')}
+                aria-checked={_think}
+                onClick={() => _setThink((v) => !v)}
+                className={`relative ml-4 shrink-0 inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-[var(--accent)] ${
+                  _think ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sand)]'
                 }`}
-              />
-            </button>
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    _think ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
-        </div>
         )}
 
         {/* Reasoning Effort default — OpenAI only, matching the in-chat
             control. `reasoning_effort` is an OpenAI field; the Anthropic and
             ollama bodies never carry it. */}
         {apiType === 'openai' && (
-        <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
-          <label className='block text-sm font-medium text-[var(--fg)]'>
-            {t('reasoningEffort.label')}
-          </label>
-          <p className='mt-1 mb-2 text-xs text-[var(--fg-3)]'>
-            {t('reasoningEffort.description')}
-          </p>
-          <div className='flex gap-2 flex-wrap'>
-            {(
-              [null, 'none', 'low', 'medium', 'high'] as Array<
-                ReasoningEffort | null
-              >
-            ).map((opt) => (
-              <button
-                key={String(opt)}
-                type='button'
-                onClick={() => _setReasoningEffort(opt)}
-                className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
-                  _reasoningEffort === opt
-                    ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-fg)]'
-                    : 'border-[var(--border-mid)] text-[var(--fg-2)] hover:bg-[var(--bg-hover)]'
-                }`}
-              >
-                {opt === null
-                  ? t('reasoningEffort.default')
-                  : t(`reasoningEffort.${opt}`)}
-              </button>
-            ))}
+          <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
+            <label className='block text-sm font-medium text-[var(--fg)]'>
+              {t('reasoningEffort.label')}
+            </label>
+            <p className='mt-1 mb-2 text-xs text-[var(--fg-3)]'>
+              {t('reasoningEffort.description')}
+            </p>
+            <div className='flex gap-2 flex-wrap'>
+              {(
+                [
+                  null,
+                  'none',
+                  'low',
+                  'medium',
+                  'high',
+                ] as Array<ReasoningEffort | null>
+              ).map((opt) => (
+                <button
+                  key={String(opt)}
+                  type='button'
+                  onClick={() => _setReasoningEffort(opt)}
+                  className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                    _reasoningEffort === opt
+                      ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-fg)]'
+                      : 'border-[var(--border-mid)] text-[var(--fg-2)] hover:bg-[var(--bg-hover)]'
+                  }`}
+                >
+                  {opt === null
+                    ? t('reasoningEffort.default')
+                    : t(`reasoningEffort.${opt}`)}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
         )}
 
         <button

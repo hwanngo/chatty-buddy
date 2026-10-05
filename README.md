@@ -1,578 +1,136 @@
-# chatty-buddy
+# Chatty Buddy
 
-> Play and chat smarter with chatty-buddy — an amazing open-source web app with a chatty-buddy API!
+A browser-based chat workspace for OpenAI-compatible, Anthropic Messages, and Ollama APIs. React 19, TypeScript 6, Zustand 5, Tailwind 4 and Vite 8 build a static site and installable PWA. There is no application server or application account system.
 
-[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-6.0-3178C6?logo=typescript)](https://www.typescriptlang.org/)
-[![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite)](https://vitejs.dev/)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
-[![Zustand](https://img.shields.io/badge/Zustand-5.0-FF9900)](https://github.com/pmndrs/zustand)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+## Run locally
 
-A powerful, privacy-focused ChatGPT client that runs in your browser and installs as a PWA. Built with modern web technologies and designed for both casual users and power users.
+Use **Node 22.12 or newer** and **pnpm 9.15.9** (the package-manager version is pinned).
 
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Quick Start](#quick-start)
-- [Development](#development)
-- [Environment Variables](#environment-variables)
-- [Local & LAN Endpoints](#local--lan-endpoints)
-- [Project Structure](#project-structure)
-- [Architecture](#architecture)
-  - [State Management](#state-management)
-  - [API Layer](#api-layer)
-  - [Data Persistence](#data-persistence)
-  - [Internationalization](#internationalization)
-- [Progressive Web App (PWA)](#progressive-web-app-pwa)
-- [Building for Production](#building-for-production)
-- [Deployment](#deployment)
-- [Adding New Settings](#adding-new-settings)
-- [Updating Models](#updating-models)
-- [Contributing](#contributing)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
-
----
-
-## Features
-
-### Core Chat Experience
-- **Multi-model support** — Chat with hundreds of AI models via OpenRouter, OpenAI, Azure OpenAI, or any custom OpenAI-compatible or Anthropic-compatible endpoint
-- **Three API protocols** — OpenAI-compatible, Anthropic Messages, or ollama's native `/api/chat`; supports Anthropic, Kimi, MiniMax, GLM, ollama, and any provider implementing one of them
-- **Streaming responses** — Real-time token streaming for a fluid conversation experience
-- **Live activity indicator** — While a response is in flight but hasn't produced text yet, an animated pixel-grid loader shows what's happening plus a running elapsed timer, so a slow model is visibly *slow* rather than indistinguishable from *stuck*
-- **Reasoning traces** — Thinking models get their reasoning shown in a collapsible block instead of dumped into the answer, whether it arrives inline as `<think>…</think>` (local runtimes: llama.cpp, MLX, ollama) or in a separate stream field (`delta.reasoning` on OpenRouter, `delta.reasoning_content` on DeepSeek and Qwen via vLLM). Expanded while the model thinks, collapsed once the answer lands
-- **Fetch URLs (tool calling)** — Off by default. When on, the model can call a `fetch_url` tool to read a page you link; the app performs the fetch (via the `r.jina.ai` reader, since browsers can't fetch arbitrary sites) and hands the text back. Works against any OpenAI-compatible endpoint including local ones, and the result appears as an expandable chip in the transcript
-- **Thinking toggle (ollama)** — Turn a thinking model's reasoning off for much faster answers. Only possible on the native ollama protocol: its OpenAI-compatible endpoint ignores every way of asking, verified across six different parameters
-- **LaTeX math** — Inline `$O(\log n)$`, block `$$…$$`, and `\(…\)` / `\[…\]` all render via KaTeX, with dollar signs that are plainly currency ("costs $5 and shipping is $10") left alone rather than parsed as equations
-- **Rich message content** — Support for text and images in conversations
-- **Markdown rendering** — Full GitHub-flavored Markdown with syntax highlighting, tables, and LaTeX math
-- **Code blocks** — Syntax highlighting for 30+ programming languages with copy-to-clipboard
-- **Message editing** — Edit any message in the conversation and regenerate responses
-- **Conversation branching** — Navigate between different response variations with up/down buttons
-- **Chat cloning** — Duplicate existing conversations to iterate on prompts
-
-### Organization & Productivity
-- **Folder management** — Organize chats into collapsible, color-coded folders
-- **Chat search** — Full-text search across all conversation titles
-- **Prompt library** — Save, import, and export reusable system prompts
-- **Auto-title generation** — Automatically generate descriptive chat titles
-- **Token counting** — Real-time token usage and cost estimation per model
-- **Chat size display** — Optional display of conversation token count
-
-### Customization & Settings
-- **Dark & light themes** — Warm, carefully crafted color palette inspired by Anthropic's design language
-- **Per-chat configuration** — Customize model, temperature, max tokens, and penalties per conversation via the ChatConfigMenu
-- **Reasoning effort** — Set reasoning effort level (low / medium / high) for supported o1/o3-style models
-- **Web search toggle** — Enable web search on models that support it
-- **Image detail selection** — Choose image resolution (low / high / auto) globally or per chat
-- **Advanced mode** — Toggle between simple and advanced configuration UI
-- **Custom models** — Add your own models with custom pricing and context lengths
-- **System message customization** — Configure default system instructions
-- **Auto-scroll toggle** — Control automatic scrolling during streaming
-- **Enter-to-submit** — Optional Enter key behavior configuration
-
-### Data & Sync
-- **Import / Export** — Backup and restore chats as JSON
-- **Google Drive sync** — Optional cloud synchronization via Google OAuth
-- **ShareGPT integration** — Share conversations publicly with one click
-- **Chat download** — Export conversations as images or text
-- **Persistent state** — All data saved locally in the browser
-
-### Installable (PWA)
-- **Install to home screen / desktop** — Add to home screen on iOS/Android and "Install" on Chrome/Edge
-- **Standalone window** — Launches in its own window without browser chrome
-- **Offline app shell** — Service worker precaches the app so it loads instantly and past chats are viewable offline
-- **Silent auto-update** — New versions are fetched in the background and applied on next open
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| **Framework** | React 19 (Functional Components + Hooks) |
-| **Language** | TypeScript 6.0 (Strict mode) |
-| **Build Tool** | Vite 8 with SWC for fast compilation |
-| **Styling** | Tailwind CSS 4 (CSS-first config) + custom design tokens in `src/main.css` |
-| **Typography** | `@tailwindcss/typography` plugin |
-| **State** | Zustand 5 with persist middleware |
-| **Markdown** | `react-markdown` + `remark-gfm` + `rehype-highlight` + `rehype-katex` |
-| **Icons** | Custom SVG icon components |
-| **i18n** | `react-i18next` with HTTP backend (en-US, vi-VN) |
-| **PWA** | `vite-plugin-pwa` (Workbox) |
-| **Package Manager** | pnpm 9.15 |
-
-### Key Dependencies
-- **@dqbd/tiktoken** — Token counting for OpenAI models
-- **html2canvas** — Chat screenshot generation
-- **jspdf** — PDF export functionality
-- **papaparse** — CSV data parsing
-- **uuid** — Unique chat/message identifiers
-- **lodash** — Utility functions
-- **react-toastify** — Notification system
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) 18+ (LTS recommended)
-- [pnpm](https://pnpm.io/) 9.15+ (`npm install -g pnpm`)
-
-### Installation
-
-```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd chatty-buddy
-
-# 2. Install dependencies
-pnpm install
-
-# 3. Start the development server
+```sh
+corepack enable
+pnpm install --frozen-lockfile
 pnpm dev
 ```
 
-The app will be available at `http://localhost:5173`.
+Open the URL printed by Vite. Choose the API protocol and endpoint in API settings. OpenAI normally requires a key; local Ollama/custom services can be keyless. A local endpoint must allow requests from the app's browser origin (CORS). Provider API contracts and model capabilities still apply when a service claims compatibility.
 
----
-
-## Development
-
-### Available Scripts
-
-| Script | Command | Description |
-|--------|---------|-------------|
-| `dev` | `pnpm dev` | Start Vite dev server on port 5173 |
-| `build` | `pnpm build` | Type-check and build for production |
-| `preview` | `pnpm preview` | Preview the production build locally |
-
-### Development Workflow
-
-```bash
-# Start the dev server
-pnpm dev
+```sh
+pnpm typecheck       # TypeScript validation
+pnpm lint            # TypeScript validation plus unused declaration/parameter checks
+pnpm test            # Deterministic Vitest regression suite; no paid provider calls
+pnpm test:watch      # Watch regression tests
+pnpm check           # Lint, tests and production build
+pnpm audit           # Dependency advisory scan
+pnpm build           # Production assets in dist/
+pnpm preview         # Locally inspect dist/
 ```
 
-Note: the service worker is only generated in production builds (`pnpm build`). To exercise install/offline behavior locally, run `pnpm build && pnpm preview`.
+Pull requests run the same checks. Main-branch deployment also runs tests and the dependency gate before publishing. Tests cover protocol framing/Unicode/errors, tool permissions, import/backup validation, storage failure, model-cache recovery, usage estimates and UI commit/discard behavior. Live provider/Google account tests are intentionally separate.
 
----
+## Features and limits
 
-## Environment Variables
+- Streaming chat, Markdown/code/math rendering, reasoning traces and expandable tool activity.
+- Text/image messages, message editing/reordering, chat cloning, folders and search.
+- Reusable prompts, English/Vietnamese UI, light/dark themes and configurable keyboard behavior.
+- Per-chat sampling, input context budget, optional output limit and protocol-specific capabilities.
+- Model discovery from the configured endpoint, with OpenRouter metadata and a bundled catalog fallback; custom model metadata can override defaults.
+- Versioned JSON conversation backups and optional Google Drive snapshot backups.
+- Token/cost **estimates**, not billing records. Unknown rates and image costs are explicitly unknown; partial totals do not pretend to cover all usage. Check provider billing for authoritative spend.
 
-Create a `.env` file in the project root. All variables are prefixed with `VITE_` and are optional.
+The application does not provide managed multi-user accounts, shared team authorization, payment processing, ShareGPT publishing, or a server proxy. Message up/down controls reorder messages; they are not a response-branch history browser.
 
-```bash
-# .env
+## Privacy and credentials
 
-# Custom default API endpoint (overrides built-in default)
-VITE_CUSTOM_API_ENDPOINT=https://api.openai.com/v1/chat/completions
+API keys are stored in this browser's origin storage and transmitted to the endpoint you select. Chat content is sent to that endpoint. Anyone with access to the browser profile/origin storage can potentially read it. Use a trusted browser and provider; public HTTPS is required for API endpoints, while local/private HTTP is permitted for development/LAN services.
 
-# Default API endpoint for new users
-VITE_DEFAULT_API_ENDPOINT=https://api.openai.com/v1/chat/completions
+The optional **Fetch URLs** capability sends requested URLs to `r.jina.ai` and sends the returned page text to the model. It is disabled by default and enforced again at execution. Reading external content may incur provider/tool costs. Remote images can contact their image host. Public model metadata/fonts may also be fetched externally.
 
-# ⚠️ DANGER: Embedding an API key bundles it as plaintext in the compiled JS.
-# Anyone with access to the deployed site can extract it.
-# ONLY use this for single-user LOCAL installations.
-VITE_OPENAI_API_KEY=sk-...
+Google authorization requests the `drive.file` scope; the access token is held in memory rather than persisted. Cloud documents exclude the model API key. Earlier versions could include that key in an initial backup: account owners should review existing Drive files/history and decide whether to remove old backups or rotate affected credentials. Updating this app does not rewrite historical Drive files or rotate keys automatically.
 
-# Default system message (overrides the built-in default)
-VITE_DEFAULT_SYSTEM_MESSAGE=You are a helpful assistant.
+**Production builds reject `VITE_OPENAI_API_KEY`.** Enter keys in the browser instead of bundling them into a public static site. No build-time variable with a `VITE_` prefix can act as a server secret.
 
-# Google OAuth Client ID for Google Drive sync
-VITE_GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
-```
+## Configuration
 
-### Security Warning
+Copy `.env.example` only if build/development defaults are needed. All entries are optional.
 
-**Never commit `.env` files containing real API keys.** The `.env.example` file is safe to commit as a template. If you deploy to a public host, always instruct users to enter their own API keys in the UI.
+| Variable                      | Meaning                                                                                                                                        |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_DEFAULT_API_ENDPOINT`   | Default model API endpoint                                                                                                                     |
+| `VITE_OPENAI_API_KEY`         | Development-server default key only; rejected by production build                                                                              |
+| `VITE_DEFAULT_SYSTEM_MESSAGE` | Default system text; an explicit empty value intentionally creates a blank prompt                                                              |
+| `VITE_GOOGLE_CLIENT_ID`       | Public OAuth web client ID enabling Drive; configure authorized browser origins in Google separately                                           |
+| `VITE_BASE_PATH`              | Optional deployment path with leading/trailing slashes, such as `/chatty-buddy/`; defaults to repository name in GitHub Actions or `/` locally |
 
----
+Changing build variables requires rebuilding. Regular provider settings are changed within the application. `VITE_CUSTOM_API_ENDPOINT` is obsolete and unused.
 
-## Local & LAN Endpoints
+## Storage, backup and recovery
 
-chatty-buddy talks to any OpenAI-compatible server, including a locally running model server such
-as [Ollama](https://ollama.com) — not just hosted providers. Set **API Format** to **OpenAI
-Compatible**, enable **Use custom API endpoint**, and enter:
+Browser-local state remains authoritative while Drive is enabled. Writes must succeed locally before the corresponding store mutation is committed; storage errors preserve the editor draft. The local persisted document is versioned and migrated at startup. Transient notifications/generation state are not durable data.
 
-- `http://localhost:11434/v1/chat/completions` for Ollama running on the same machine
-- `http://<lan-ip>:11434/v1/chat/completions` for Ollama running on another machine on your network
+Drive uses immutable snapshot files rather than overwriting a shared mutable conversation file. This avoids destructive last-writer-wins updates between devices. Disconnection/logout leaves local conversations intact. Divergent remote/local conversations are retained rather than silently overwriting one another. A pending/failed sync does not mean the local write failed. Do not close the tab expecting an unfinished network upload to finish; reconnect to synchronize locally saved changes.
 
-Leave the API key field blank — Ollama doesn't require one.
+Snapshot history consumes Drive space. Automatic deletion of historical backups is intentionally avoided; review and remove obsolete snapshots in Drive after checking the backup you intend to retain. Cloud backup is not end-to-end encrypted and does not remove browser storage limits. Keep periodic downloaded backups for important conversations.
 
-The model picker is populated from that endpoint automatically: the app asks it for its own model
-list (`GET …/v1/models`), and the built-in catalog is skipped while the endpoint answers. If the
-endpoint doesn't respond — unreachable, no `/models` route, CORS refused — the picker falls back to
-the built-in catalog and the app carries on.
+Use **Import / Export** for versioned JSON backup/restore. Per-chat downloads use the same format as bulk exports. Import validation is bounded and rejects malformed content/graphs before state mutation; legacy supported formats are normalized. Back up before migrations or storage cleanup. Repair/migration controls operate on validated documents rather than forcing a magic future version.
 
-A few details worth knowing:
-
-- **Custom endpoints only.** The built-in OpenAI and Anthropic endpoints are never asked; they keep
-  the curated catalog, with its real context windows and pricing. Anything else — a LAN address, a
-  Tailscale URL, a self-hosted proxy — counts as custom and is asked.
-- **The request carries no API key.** It runs at startup and whenever you save API settings, before
-  you've sent anything, so no credential is transmitted to it. An endpoint that requires
-  authentication simply answers 401 and the catalog is used instead.
-- **Models the catalog doesn't recognise** get conservative metadata: an 8192-token context window
-  and no cost tracking. Image attachment is offered for them, since local vision models are a common
-  case; if a model can't accept images the server will say so. Register the model under
-  **Settings → Custom Models** to give it exact numbers.
-
-### Ollama CORS
-
-By default Ollama rejects browser requests from origins it doesn't recognize — its CORS preflight
-returns 403. Tell it to accept the app's origin via `OLLAMA_ORIGINS`. For the deployed app:
-
-```bash
-OLLAMA_ORIGINS="https://hwanngo.github.io" OLLAMA_HOST=0.0.0.0:11434 ollama serve
-```
-
-`OLLAMA_HOST=0.0.0.0:11434` is what makes Ollama reachable from other devices on the network;
-drop it for a local-machine-only setup. For local development (`pnpm dev`, `http://localhost:5173`),
-use `OLLAMA_ORIGINS="http://localhost:5173"` instead.
-
-### Plaintext HTTP
-
-Plaintext `http://` endpoints are permitted only for addresses that name the local machine or the
-local network: loopback, RFC1918 ranges (`10.x`, `172.16–31.x`, `192.168.x`), link-local addresses,
-`.local` / `.lan` / `.internal` / `.home.arpa` suffixes, and single-label host names. Any host with
-a public domain name still requires `https://`.
-
-One caveat on single-label names: a bare name like `ollama` is resolved by your operating system,
-and if it is configured with a DNS search suffix that name can expand to a public domain. Prefer a
-LAN IP address or a `.local` / `.internal` name when the endpoint takes an API key.
-
----
-
-## Project Structure
-
-```
-chatty-buddy/
-├── .env.example              # Environment variable template
-├── .env                      # Local environment variables (gitignored)
-├── index.html                # HTML entry point
-├── package.json              # Dependencies & scripts
-├── tsconfig.json             # TypeScript configuration
-├── vite.config.ts            # Vite build configuration (incl. PWA plugin)
-│
-├── public/
-│   ├── locales/              # i18n translation files
-│   │   ├── en-US/            # English (US) translations
-│   │   └── vi-VN/            # Vietnamese translations
-│   ├── models.json           # OpenRouter model catalog
-│   └── *.png / *.svg         # Favicons and static assets
-│
-└── src/
-    ├── main.tsx              # React application entry point
-    ├── App.tsx               # Root application component
-    ├── i18n.ts               # i18next initialization
-    │
-    ├── api/                  # API layer
-    │   ├── api.ts            # OpenAI-compatible + Anthropic-compatible chat completions
-    │   ├── google-api.ts     # Google Drive sync operations
-    │   └── helper.ts         # SSE stream parsing (OpenAI + Anthropic)
-    │
-    ├── components/           # React components
-    │   ├── AboutMenu/        # About dialog
-    │   ├── AgentActivity/    # In-flight indicators (pixel-grid loader + elapsed timer)
-    │   ├── ApiMenu/          # API configuration panel
-    │   ├── ApiPopup/         # API key popup
-    │   ├── Chat/             # Main chat interface
-    │   │   ├── ChatContent/  # Message list & rendering
-    │   │   └── ChatInput.tsx # Message input bar
-    │   ├── ConfigMenu/       # Chat configuration panel
-    │   ├── ChatConfigMenu/   # Per-chat settings
-    │   ├── GoogleSync/       # Google Drive sync UI
-    │   ├── ImportExportChat/ # Import/export dialogs
-    │   ├── LanguageSelector/ # Language switcher
-    │   ├── Menu/             # Sidebar navigation
-    │   │   ├── ChatHistoryList.tsx
-    │   │   ├── ChatHistory.tsx
-    │   │   ├── ChatFolder.tsx
-    │   │   ├── NewChat.tsx
-    │   │   ├── NewFolder.tsx
-    │   │   └── MenuOptions/  # Menu action buttons
-    │   ├── PopupModal/       # Reusable modal component
-    │   ├── PromptLibraryMenu/# Prompt management
-    │   ├── SettingsMenu/     # Application settings
-    │   ├── ShareGPT/         # ShareGPT integration
-    │   └── Toast/            # Toast notifications
-    │
-    ├── constants/            # Application constants
-    │   └── chat.ts           # Defaults, system messages, code languages
-    │
-    ├── hooks/                # Custom React hooks
-    │   └── useInitialiseNewChat.ts
-    │
-    ├── store/                # Zustand state management
-    │   ├── store.ts          # Main store composition
-    │   ├── chat-slice.ts     # Chat state & actions
-    │   ├── input-slice.ts    # Input state
-    │   ├── auth-slice.ts     # API key & auth state
-    │   ├── config-slice.ts   # User preferences
-    │   ├── prompt-slice.ts   # Prompt library state
-    │   ├── toast-slice.ts    # Toast notifications
-    │   ├── custom-models-slice.ts # User-defined models
-    │   └── migrate.ts        # localStorage schema migrations
-    │
-    ├── types/                # TypeScript type definitions
-    │   ├── chat.ts           # Core chat data models
-    │   ├── api.ts            # API types (OpenAI + Anthropic request/response)
-    │   ├── theme.ts          # Theme type definitions
-    │   └── prompt.ts         # Prompt type definitions
-    │
-    ├── utils/                # Utility functions
-    │   ├── api.ts            # API helpers (Azure detection, etc.)
-    │   ├── modelReader.ts    # Model catalog parser
-    │   ├── thinking.ts       # Splits inline <think> reasoning out for display
-    │   ├── latex.ts         # LaTeX delimiter normalising + currency-safe $ handling
-    │   ├── tools.ts         # fetch_url tool definition + executor
-    │   └── ...               # Other utilities
-    │
-    └── assets/
-        └── icons/            # Custom SVG icon components
-```
-
----
+If storage is full, export conversations, remove unneeded data deliberately, and retry. Image count/size limits reduce quota pressure but do not guarantee available browser capacity. If model discovery fails, check the endpoint/CORS settings; corrupt catalog caches are discarded and network/bundled fallback is attempted.
 
 ## Architecture
 
-### State Management
-
-The application uses **Zustand** with a **slice pattern** for modular state management.
-
-```
-StoreState = ChatSlice + InputSlice + AuthSlice + ConfigSlice +
-             PromptSlice + ToastSlice + CustomModelsSlice + CloudAuthSlice
-```
-
-Each slice owns a domain of state and its corresponding actions. The store is composed in `src/store/store.ts`.
-
-**Persistence**: The store is automatically persisted to `localStorage` under the key `chatty-buddy`. A `partialize` function (`createPartializedState`) controls exactly which fields are saved. The current schema version is **3**.
-
-**Runtime-only state**: `createPartializedState` is an allowlist, so any field it omits is deliberately *not* persisted and therefore needs no migration. Request-scoped flags such as `generating` and `generatingStartedAt` live here — restoring them from a previous session would leave the UI claiming a request is in flight when none is.
-
-**Migration Strategy**: When the *persisted* schema changes, a migration function must be added to `src/store/migrate.ts`, and the version in `store.ts` must be incremented. The migration pipeline runs automatically on app launch.
-
-### API Layer
-
-The API layer (`src/api/api.ts`) supports two protocols selected by the user via the **API Format** setting:
-
-**OpenAI-compatible** (`apiType: 'openai'`):
-- `getChatCompletion` — Standard request/response
-- `getChatCompletionStream` — SSE streaming (`data: [DONE]` terminator)
-
-**Anthropic-compatible** (`apiType: 'anthropic'`):
-- `getAnthropicChatCompletion` — Non-streaming, returns `content[0].text`
-- `getAnthropicChatCompletionStream` — SSE streaming with named events (`content_block_delta` / `message_stop`)
-- `convertMessagesForAnthropic` — Converts the internal message array: extracts `role: "system"` into a top-level `system` param, converts `image_url` blocks to Anthropic image source format
-
-SSE stream parsing lives in `src/api/helper.ts`: `parseEventSource` for OpenAI, `parseAnthropicEventSource` for Anthropic.
-
-**Supported Endpoints**:
-- **OpenAI** — `/v1/chat/completions` (default: `https://api.openai.com/v1/chat/completions`)
-- **Azure OpenAI** — Auto-detected; handles model name mapping and API versioning
-- **Anthropic** — `/v1/messages` (default: `https://api.anthropic.com/v1/messages`)
-- **Custom** — Any OpenAI-compatible or Anthropic-compatible endpoint
-
-**Authentication**:
-- OpenAI / custom: `Authorization: Bearer <apiKey>`
-- Azure: `api-key: <apiKey>`
-- Anthropic-compatible: `x-api-key: <apiKey>` + `anthropic-version: 2023-06-01`
-
-### Data Persistence
-
-All user data is stored locally in the browser:
-
-| Storage | Key | Contents |
-|---------|-----|----------|
-| `localStorage` | `chatty-buddy` | Zustand persisted state (chats, settings, API keys) |
-
-**Privacy note**: Your API key and chat history never leave your device unless you explicitly enable Google Drive sync.
-
-### Internationalization
-
-The app supports multiple languages via `react-i18next`:
-
-- **Namespaces**: `main`, `model`, `api`, `about`, `import`, `migration`, `drive` (drive only when `VITE_GOOGLE_CLIENT_ID` is set)
-- **Languages**: English (`en-US`), Vietnamese (`vi-VN`)
-- **Fallback**: English (`en-US`)
-
-Translation files live in `public/locales/<lang>/` and are loaded dynamically at runtime.
-
----
-
-## Progressive Web App (PWA)
-
-chatty-buddy is installable as a PWA via [`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/) (Workbox).
-
-### How it works
-
-- **Manifest + service worker** are generated at build time (`pnpm build` → `dist/manifest.webmanifest`, `dist/sw.js`).
-- The service worker is registered in `src/main.tsx` via `registerSW` from `virtual:pwa-register` with `registerType: 'autoUpdate'` (silent background updates).
-- The web build uses an **absolute base** (`/chatty-buddy/` on GitHub Pages, `/` otherwise) — a service worker requires one.
-- `workbox-window` is a direct devDependency (pnpm strict-resolution requirement).
-
-### Installing
-
-- **Chrome / Edge (desktop & Android)** — use the "Install" affordance in the address bar / menu.
-- **iOS Safari** — Share → "Add to Home Screen".
-
-Installed apps launch in a standalone window, load instantly from the precached app shell, and show past chats (stored in `localStorage`) offline. Sending new messages still requires network. Test locally with `pnpm build && pnpm preview`.
-
----
-
-## Building for Production
-
-### Web Build
-
-```bash
-pnpm build
+```text
+src/main.tsx → App.tsx → components + Zustand slices
+                              ↓
+                   useSubmit → protocol adapters → selected provider
+                       ↓              ↓
+                stable chat/message IDs + stream parser
+                       ↓
+              durable local storage → optional Drive snapshots
 ```
 
-Outputs to `dist/`:
-- Static HTML, CSS, JS assets plus the PWA service worker (`sw.js`) and `manifest.webmanifest`
-- Suitable for deployment to GitHub Pages, Vercel, Netlify, or any static host
+- `src/api/`: protocol request/response transformations and Drive HTTP operations.
+- `src/hooks/useSubmit.ts`, `src/utils/generation.ts`: request lifetime, stable mutation targets, bounded tools, stream framing and cancellation.
+- `src/store/`: state slices, persistence and migrations.
+- `src/utils/import.ts`: validated conversation import/export contracts.
+- `src/utils/modelCatalog.ts`, `modelReader.ts`, `endpointModels.ts`: guarded metadata/discovery.
+- `src/components/`: chat workspace, navigation, settings, prompt library, shared dialogs/buttons.
+- `src/main.css`: semantic theme/shape/elevation tokens; reuse these for UI changes.
+- `public/locales/en-US`, `public/locales/vi-VN`: mirrored UI translations.
+- `public/models.json`: authoritative bundled model snapshot.
+- `tests/`, `src/**/*.test.*`: deterministic regression tests.
 
----
+Input-history budget (`max_tokens`) and output limit (`output_tokens`) are different concepts. Tools are enforced against the capabilities captured at request start. Cancellation covers nested generation/title requests. Third-party API rejection and network interruption must remain visible as recoverable states.
 
 ## Deployment
 
-### Static Hosting (Recommended)
+### Static hosting / GitHub Pages
 
-The web build produces static files suitable for any static host:
+Build and serve `dist/`. The Pages workflow derives its path from the repository name. Set `VITE_BASE_PATH=/` for a custom-domain root or an explicit subpath for other hosting. Configure Google origins and browser CORS independently. Verify hosting security/cache headers, service-worker updates and offline behavior in the deployed environment.
 
-1. Run `pnpm build`
-2. Upload the `dist/` folder to your hosting provider
+### Docker
 
-**Supported platforms**:
-- [GitHub Pages](https://pages.github.com/)
-- [Vercel](https://vercel.com/)
-- [Netlify](https://www.netlify.com/)
-- [Cloudflare Pages](https://pages.cloudflare.com/)
-
-### Environment for Deployment
-
-For public deployments, set these environment variables at build time:
-
-```bash
-VITE_DEFAULT_API_ENDPOINT=https://api.openai.com/v1/chat/completions
+```sh
+docker compose build
+docker compose up -d
 ```
 
-**Do not** set `VITE_OPENAI_API_KEY` on public deployments.
+Browse `http://localhost:5173`. The multi-stage build retains only static assets in an unprivileged Nginx runtime on port 8080, with a `/healthz` check, compression, immutable hashed-asset caching and security headers. Base images are digest-pinned; refresh digests deliberately for security updates. Browser-facing secrets must not be passed as build arguments or bundled environment values.
 
----
+The Docker runtime does not proxy model APIs. CORS and HTTPS/LAN constraints are still browser concerns. Docker daemon availability is required to build/test the image.
 
-## Adding New Settings
+## Updating the model snapshot
 
-When adding a new user-configurable setting, touch **all** of these files:
-
-1. **`src/types/chat.ts`** — Add field to the relevant interface (`ConfigInterface` for chat config, or `LocalStorageInterface` for global settings)
-2. **`src/store/config-slice.ts`** — Add to slice state and actions
-3. **`src/store/store.ts`** — Add to `createPartializedState`
-4. **`src/store/migrate.ts`** — Add migration from previous schema version; bump version in `store.ts`
-5. **`src/constants/chat.ts`** — Add default value
-6. **`src/components/ConfigMenu/ConfigMenu.tsx`** or **`src/components/ChatConfigMenu/ChatConfigMenu.tsx`** — Add UI control
-7. **`public/locales/en-US/main.json`** or **`model.json`** — Add i18n key
-
----
-
-## Updating Models
-
-Model metadata is sourced from `public/models.json` (OpenRouter format).
-
-To update the model catalog:
-
-1. Download the latest models from OpenRouter:
-   ```bash
-   curl https://openrouter.ai/api/v1/models > models.json
-   ```
-2. Normalize the JSON keys:
-   ```bash
-   node sortModelsJsonKeys.js
-   ```
-3. Move to the public folder:
-   ```bash
-   mv models.json public/
-   ```
-4. Commit and redeploy.
-
-**Custom models** can also be added at runtime via the Settings menu.
-
----
-
-## Contributing
-
-We welcome contributions! Please follow these guidelines:
-
-### Code Style
-- **TypeScript strict mode** is enforced — no `any` types without justification
-- **Functional components** with hooks preferred
-- **Tailwind CSS** for all styling; avoid inline styles. The one sanctioned exception is a value that genuinely varies per element and cannot be a static class — e.g. the per-cell `animation-delay` in `AgentActivity/PixelGridLoader`. Note that inline styles outrank stylesheet rules, so anything meant to override them (a `prefers-reduced-motion` block, for instance) needs `!important`
-- **Color via design tokens** — reference `var(--fg)`, `var(--bg-card)` etc. rather than raw hex or Tailwind palette colors, so light/dark both work without `dark:` variants
-- **Path aliases** must be used for all imports (e.g., `@components/`, `@store/`)
-
-### Commit Messages
-Use clear, descriptive commit messages:
-```
-feat: add auto-scroll toggle
-fix: resolve token count overflow
-refactor: simplify chat slice logic
-docs: update README with PWA instructions
+```sh
+node sortModelsJsonKeys.js
 ```
 
-### Before Submitting
-1. Ensure `pnpm build` passes without TypeScript errors
-2. Update translations if you add new user-facing text
-3. Add a migration if you modify the localStorage schema
+This fetches the public OpenRouter catalog, validates the response and writes sorted data directly to `public/models.json`. The root `models.json`, if present in an older working directory, is an ignored legacy download artifact, not a second authoritative catalog. Review the resulting diff and run checks. The updater does not bump package versions.
 
----
+## Contribution and verification
 
-## Troubleshooting
+Read `CLAUDE.md` for provider-specific behavior and local conventions. Persisted-schema changes require explicit migration/defaulting. Add a regression for bugs at the relevant boundary; do not use real API credentials in fixtures. UI changes should preserve shared primitives, keyboard access, visible labels, dark/light tokens and small-screen behavior.
 
-### Common Issues
-
-| Issue | Solution |
-|-------|----------|
-| `Cannot find module '@components/...'` | Ensure path aliases are configured in both `tsconfig.json` and `vite.config.ts` |
-| API returns 404 | Check that your endpoint URL includes `/v1/chat/completions` if required by your provider |
-| Azure model not found | Azure maps `gpt-3.5-turbo` → `gpt-35-turbo` automatically; verify your deployment name |
-| Rate limited (429) | Reduce request frequency or switch API keys/endpoints |
-| Insufficient quota | Check your OpenAI/Azure billing dashboard |
-| Stale content after deploy | The service worker auto-updates on next open; fully close and reopen the app/tab to force it |
-| localStorage data lost | Check browser console for migration errors; schema migrations may fail silently |
-
-### Getting Help
-
-1. Check the browser DevTools console for error messages
-2. Verify your API key and endpoint in the API settings panel
-3. Test your endpoint with a simple `curl` request outside the app
-4. File an issue with reproduction steps and environment details
-
----
+`PROJECT_AUDIT.md` preserves the original audit evidence. `AUDIT_REMEDIATION.md` records the implemented corrections, verification and remaining external checks. Passing deterministic tests is not certification of Google OAuth configuration, every provider/model combination, screen-reader conformance or production infrastructure.
 
 ## License
 
-This project is open-source. See the [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-- Built with [React](https://react.dev/), [Vite](https://vitejs.dev/), and [Tailwind CSS](https://tailwindcss.com/)
-- Model data powered by [OpenRouter](https://openrouter.ai/)
-- Token counting via [@dqbd/tiktoken](https://github.com/dqbd/tiktoken)
-- PWA support via [vite-plugin-pwa](https://vite-pwa-org.netlify.app/)
-- Fonts: DM Sans, Lora, DM Mono (served via Google Fonts)
-
----
-
-<p align="center">
-  Made with care by <strong>Hwan</strong>
-</p>
+A project-wide license has not been supplied in this repository. The earlier MIT badge did not link to an existing license and has been removed; the owner must establish the intended project license. `src/fonts/LICENSE.txt` applies to the bundled font material only.

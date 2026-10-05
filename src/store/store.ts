@@ -10,7 +10,8 @@ import {
   CustomModelsSlice,
   createCustomModelsSlice,
 } from './custom-models-slice';
-import { migrate } from './migrate';
+import { migrate, STORE_VERSION } from './migrate';
+import { createDurableStorage } from './storage/durableStorage';
 
 export type StoreState = ChatSlice &
   InputSlice &
@@ -34,6 +35,7 @@ export const createPartializedState = (state: StoreState) => ({
   apiEndpoint: state.apiEndpoint,
   theme: state.theme,
   autoTitle: state.autoTitle,
+  titleModel: state.titleModel,
   advancedMode: state.advancedMode,
   prompts: state.prompts,
   defaultChatConfig: state.defaultChatConfig,
@@ -55,24 +57,74 @@ export const createPartializedState = (state: StoreState) => ({
   customModels: state.customModels,
 });
 
+type PersistedState = ReturnType<typeof createPartializedState>;
+const storage = createDurableStorage<PersistedState>(() => localStorage);
+const preflight = (state: StoreState) =>
+  storage.setItem('chatty-buddy', {
+    state: createPartializedState(state),
+    version: STORE_VERSION,
+  });
+
 const useStore = create<StoreState>()(
   persist(
-    (set, get) => ({
-      ...createChatSlice(set, get),
-      ...createInputSlice(set, get),
-      ...createAuthSlice(set, get),
-      ...createConfigSlice(set, get),
-      ...createPromptSlice(set, get),
-      ...createToastSlice(set, get),
-      ...createCustomModelsSlice(set, get),
-    }),
+    (set, get) => {
+      const durableSet: typeof set = (partial, replace) => {
+        const current = get();
+        const patch =
+          typeof partial === 'function' ? partial(current) : partial;
+        const next = replace ? (patch as StoreState) : { ...current, ...patch };
+        preflight(next);
+        set(next, true);
+      };
+      return {
+        ...createChatSlice(durableSet, get),
+        ...createInputSlice(durableSet, get),
+        ...createAuthSlice(durableSet, get),
+        ...createConfigSlice(durableSet, get),
+        ...createPromptSlice(durableSet, get),
+        ...createToastSlice(durableSet, get),
+        ...createCustomModelsSlice(durableSet, get),
+      };
+    },
     {
       name: 'chatty-buddy',
       partialize: (state) => createPartializedState(state),
-      version: 3,
+      storage,
+      version: STORE_VERSION,
       migrate,
+      merge: (persisted, current) => {
+        if (!persisted || typeof persisted !== 'object') return current;
+        const saved = persisted as Partial<PersistedState>;
+        const allowed = Object.fromEntries(
+          Object.keys(createPartializedState(current))
+            .filter((key) => key in saved)
+            .map((key) => [key, saved[key as keyof PersistedState]])
+        );
+        const chats = saved.chats?.map((chat) => ({
+          ...chat,
+          messages: chat.messages.map((message) =>
+            message.generationStatus === 'streaming'
+              ? { ...message, generationStatus: 'cancelled' as const }
+              : message
+          ),
+        }));
+        return { ...current, ...allowed, ...(chats ? { chats } : {}) };
+      },
     }
   )
 );
+
+// Imports and request-scoped updates also use the atomic durability boundary.
+const originalSetState = useStore.setState;
+useStore.setState = ((
+  partial: Parameters<typeof originalSetState>[0],
+  replace?: boolean
+) => {
+  const current = useStore.getState();
+  const patch = typeof partial === 'function' ? partial(current) : partial;
+  const next = replace ? (patch as StoreState) : { ...current, ...patch };
+  preflight(next);
+  originalSetState(next, true);
+}) as typeof originalSetState;
 
 export default useStore;

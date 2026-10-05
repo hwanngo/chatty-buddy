@@ -1,5 +1,11 @@
 export const isAzureEndpoint = (endpoint: string) => {
-  return endpoint.includes('openai.azure.com');
+  try {
+    return new URL(endpoint).hostname
+      .toLowerCase()
+      .endsWith('.openai.azure.com');
+  } catch {
+    return false;
+  }
 };
 
 /**

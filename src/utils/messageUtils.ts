@@ -5,7 +5,6 @@ import {
   isImageContent,
   isTextContent,
   MessageInterface,
-  TextContentInterface,
   TotalTokenUsed,
 } from '@type/chat';
 import { ModelOptions } from './modelReader';
@@ -34,12 +33,15 @@ export const getChatGPTEncoding = (
 
   const serialized = [
     messages
-      .map(({ role, content }) => {
-        const textContent = content[0];
-        const text = textContent && isTextContent(textContent) ? textContent.text : '';
-        return `<|im_start|>${role}${roleSep}${
-          text
-        }<|im_end|>`;
+      .map(({ role, content, tool_calls, tool_call_id }) => {
+        const text =
+          content
+            .filter(isTextContent)
+            .map((part) => part.text)
+            .join('\n') +
+          (tool_calls ? JSON.stringify(tool_calls) : '') +
+          (tool_call_id ?? '');
+        return `<|im_start|>${role}${roleSep}${text}<|im_end|>`;
       })
       .join(msgSep),
     `<|im_start|>assistant${roleSep}`,
@@ -48,16 +50,51 @@ export const getChatGPTEncoding = (
   return encoder.encode(serialized, 'all');
 };
 
-const countTokens = (messages: MessageInterface[], model: ModelOptions) => {
+// Generation structurally shares historical messages. Cache their estimates
+// without retaining deleted chats; each streamed replacement is a fresh key.
+const messageTokenCache = new WeakMap<
+  MessageInterface,
+  Map<ModelOptions, number>
+>();
+const framingTokens = (model: ModelOptions) =>
+  getChatGPTEncoding([], model).length;
+const countTokens = (
+  messages: MessageInterface[],
+  model: ModelOptions
+): number => {
   if (!messages || messages.length === 0) return 0;
-  return getChatGPTEncoding(messages, model).length;
+  const framing = framingTokens(model);
+  return (
+    framing +
+    messages.reduce((total, message) => {
+      let models = messageTokenCache.get(message);
+      if (!models) {
+        models = new Map();
+        messageTokenCache.set(message, models);
+      }
+      let tokens = models.get(model);
+      if (tokens === undefined) {
+        tokens =
+          getChatGPTEncoding([message], model).length -
+          framing +
+          message.content.filter(isImageContent).length * 1024;
+        // Switching models should not grow a long-lived message's cache forever.
+        if (models.size >= 4) models.clear();
+        models.set(model, tokens);
+      }
+      return total + tokens;
+    }, 0)
+  );
 };
 
 export const limitMessageTokens = (
   messages: MessageInterface[],
   limit: number = 4096,
-  model: ModelOptions
+  model: ModelOptions,
+  requireLatest = false
 ): MessageInterface[] => {
+  if (!Number.isFinite(limit) || limit <= 0)
+    throw new Error('Invalid input token budget.');
   const limitedMessages: MessageInterface[] = [];
   let tokenCount = 0;
 
@@ -80,7 +117,7 @@ export const limitMessageTokens = (
     const count = countTokens([messages[i]], model);
     if (count + tokenCount > limit) break;
     tokenCount += count;
-    limitedMessages.unshift({ ...messages[i] });
+    limitedMessages.unshift(messages[i]);
   }
 
   // Trimming walks backwards, so it can cut between an assistant message that
@@ -94,9 +131,19 @@ export const limitMessageTokens = (
 
   // Restore the system prompt at the front of whatever history fit.
   if (retainSystemMessage) {
-    limitedMessages.unshift({ ...messages[0] });
+    limitedMessages.unshift(messages[0]);
   }
 
+  if (
+    requireLatest &&
+    (messages.length === 0 ||
+      !limitedMessages.includes(messages[messages.length - 1]) ||
+      (isSystemFirstMessage && !retainSystemMessage))
+  ) {
+    throw new Error(
+      'The latest message and system prompt exceed the input token budget. Shorten them or increase the budget.'
+    );
+  }
   return limitedMessages;
 };
 
@@ -110,19 +157,17 @@ export const updateTotalTokenUsed = (
     JSON.stringify(useStore.getState().totalTokenUsed)
   );
 
-  // Filter text and image prompts
-  const textPrompts = promptMessages.filter(
-    (e) => Array.isArray(e.content) && e.content.some(isTextContent)
+  // Estimates cover the actual request history (all text blocks and tool
+  // payloads). Image counts mark cost as unknown; they are not text tokens.
+  const newPromptTokens = getChatGPTEncoding(promptMessages, model).length;
+  const newImageTokens = promptMessages.reduce(
+    (sum, message) => sum + message.content.filter(isImageContent).length,
+    0
   );
-  
-  const imgPrompts = promptMessages.filter(
-    (e) => Array.isArray(e.content) && e.content.some(isImageContent)
-  );
-
-  // Count tokens
-  const newPromptTokens = countTokens(textPrompts, model);
-  const newImageTokens = countTokens(imgPrompts, model);
-  const newCompletionTokens = countTokens([completionMessage], model);
+  const newCompletionTokens = getChatGPTEncoding(
+    [completionMessage],
+    model
+  ).length;
 
   // Destructure existing token counts or default to 0
   const {

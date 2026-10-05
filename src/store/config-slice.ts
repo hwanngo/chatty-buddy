@@ -53,7 +53,7 @@ export interface ConfigSlice {
   setAutoScroll: (autoScroll: boolean) => void;
 }
 
-export const createConfigSlice: StoreSlice<ConfigSlice> = (set, get) => ({
+export const createConfigSlice: StoreSlice<ConfigSlice> = (set) => ({
   openConfig: false,
   theme: 'light',
   hideMenuOptions: false,

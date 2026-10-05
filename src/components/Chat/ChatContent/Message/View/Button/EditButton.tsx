@@ -8,14 +8,22 @@ import BaseButton from './BaseButton';
 const EditButton = memo(
   ({
     setIsEdit,
+    disabled = false,
+    disabledReason,
   }: {
     setIsEdit: React.Dispatch<React.SetStateAction<boolean>>;
+    disabled?: boolean;
+    disabledReason?: string;
   }) => {
     const { t } = useTranslation();
     return (
       <BaseButton
-        icon={<Icon name="edit2" />}
-        buttonProps={{ 'aria-label': 'edit message', 'title': t('edit') }}
+        icon={<Icon name='edit2' />}
+        buttonProps={{
+          disabled,
+          'aria-label': 'edit message',
+          'title': disabledReason ?? t('edit'),
+        }}
         onClick={() => setIsEdit(true)}
       />
     );

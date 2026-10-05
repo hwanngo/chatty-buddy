@@ -1,6 +1,6 @@
 {
   "setupApiKey": "Setup your API key",
-  "securityMessage": "We prioritize the security of your API key and handle it with utmost care. Your key is exclusively stored on your browser and never shared with any third-party entity. It is solely used for the intended purpose of accessing the OpenAI API and not for any other unauthorized use.",
+  "securityMessage": "Your API key is saved in this browser and sent to your selected API server with your messages. If URL fetching is enabled, requested URLs are sent through Jina. Drive sync stores conversations, excluding API keys.",
   "apiEndpoint": {
     "inputLabel": "API Endpoint",
     "description": "When you choose an unofficial API endpoint, it functions as a proxy. A proxy works by acting as an intermediary between your device and the destination server, in this case, the OpenAI API. By doing so, it enables you to access the OpenAI API in regions where it might otherwise be restricted.",
@@ -9,7 +9,7 @@
   "apiKey": {
     "howTo": "Get your personal API key <0>here</0>.",
     "inputLabel": "API Key",
-    "browserStorageNote": "Stored in your browser only — never sent to any server."
+    "browserStorageNote": "Saved unencrypted in this browser and sent to the selected API server. Local servers may not require a key."
   },
   "customEndpoint": "Use custom API endpoint",
   "advancedConfig": "View advanced API configuration <0>here</0>",
@@ -18,7 +18,7 @@
     "inputLabel": "API Version",
     "description": "e.g. 2024-02-01"
   },
-  "thirdPartyEndpointWarning": "Third-party endpoint: your API key and all messages will be sent to {{endpoint}}. Only use endpoints you trust.",
+  "thirdPartyEndpointWarning": "Your messages and API key (if supplied) will be sent to {{endpoint}}. Only use servers you trust.",
   "apiType": {
     "inputLabel": "API Format",
     "openai": "OpenAI Compatible",
@@ -27,6 +27,10 @@
     "ollamaHint": "Talks to ollama’s own /api/chat instead of its OpenAI-compatible endpoint. Required to turn thinking off — the compatible endpoint ignores it. Paste your server URL, e.g. http://localhost:11434"
   },
   "errors": {
-    "toolRoundLimit": "Stopped after {{count}} tool rounds."
-  }
+    "toolRoundLimit": "Stopped after {{count}} tool rounds.",
+    "titleModelUnavailable": "Selected title model unavailable; using conversation model ({{model}})."
+  },
+  "invalidEndpoint": "Enter a valid HTTP(S) URL without embedded credentials.",
+  "showKey": "Show key",
+  "hideKey": "Hide key"
 }

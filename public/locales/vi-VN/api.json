@@ -1,6 +1,6 @@
 {
   "setupApiKey": "Thiết lập API key",
-  "securityMessage": "Chúng tôi ưu tiên bảo mật API key của bạn. Key của bạn chỉ được lưu trữ trên trình duyệt và không bao giờ được chia sẻ với bất kỳ bên thứ ba nào. Nó chỉ được dùng để kết nối với API, không phục vụ bất kỳ mục đích nào khác.",
+  "securityMessage": "Khóa API được lưu trong trình duyệt và gửi đến máy chủ API bạn chọn cùng các tin nhắn. Nếu bật lấy URL, URL được gửi qua Jina. Đồng bộ Drive lưu cuộc trò chuyện, không lưu khóa API.",
   "apiEndpoint": {
     "inputLabel": "API Endpoint",
     "description": "Khi bạn chọn một API endpoint không chính thức, nó sẽ hoạt động như một proxy — đóng vai trò trung gian giữa thiết bị của bạn và máy chủ đích. Điều này cho phép bạn truy cập API ở những khu vực có thể bị hạn chế.",
@@ -9,7 +9,7 @@
   "apiKey": {
     "howTo": "Lấy API key cá nhân của bạn <0>tại đây</0>.",
     "inputLabel": "API Key",
-    "browserStorageNote": "Chỉ lưu trong trình duyệt — không bao giờ gửi đến máy chủ nào."
+    "browserStorageNote": "Khóa được lưu không mã hóa trong trình duyệt và gửi đến máy chủ API đã chọn. Máy chủ cục bộ có thể không cần khóa."
   },
   "customEndpoint": "Sử dụng API endpoint tùy chỉnh",
   "advancedConfig": "Xem cấu hình API nâng cao <0>tại đây</0>",
@@ -18,7 +18,7 @@
     "inputLabel": "Phiên bản API",
     "description": "ví dụ: 2024-02-01"
   },
-  "thirdPartyEndpointWarning": "Endpoint bên thứ ba: API key và toàn bộ tin nhắn của bạn sẽ được gửi đến {{endpoint}}. Chỉ sử dụng các endpoint bạn tin tưởng.",
+  "thirdPartyEndpointWarning": "Tin nhắn và khóa API (nếu có) sẽ được gửi đến {{endpoint}}. Chỉ dùng máy chủ bạn tin tưởng.",
   "apiType": {
     "inputLabel": "Định dạng API",
     "openai": "Tương thích OpenAI",
@@ -27,6 +27,10 @@
     "ollamaHint": "Dùng /api/chat của ollama thay vì endpoint tương thích OpenAI. Cần thiết để tắt suy luận — endpoint tương thích bỏ qua tuỳ chọn này. Dán URL máy chủ, ví dụ http://localhost:11434"
   },
   "errors": {
-    "toolRoundLimit": "Đã dừng sau {{count}} lượt gọi công cụ."
-  }
+    "toolRoundLimit": "Đã dừng sau {{count}} lượt gọi công cụ.",
+    "titleModelUnavailable": "Mô hình tạo tiêu đề đã chọn không khả dụng; dùng mô hình cuộc trò chuyện ({{model}})."
+  },
+  "invalidEndpoint": "Nhập URL HTTP(S) hợp lệ, không chứa thông tin đăng nhập.",
+  "showKey": "Hiện khóa",
+  "hideKey": "Ẩn khóa"
 }

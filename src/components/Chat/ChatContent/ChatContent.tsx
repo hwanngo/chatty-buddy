@@ -45,8 +45,7 @@ const ChatContent = () => {
       : 0
   );
   const advancedMode = useStore((state) => state.advancedMode);
-  const generating = useStore.getState().generating;
-  const hideSideMenu = useStore((state) => state.hideSideMenu);
+  const generating = useStore((state) => state.generating);
   const autoScroll = useStore((state) => state.autoScroll);
   const model = useStore((state) =>
     state.chats &&
@@ -56,10 +55,9 @@ const ChatContent = () => {
       ? state.chats[state.currentChatIndex].config.model
       : defaultModel
   );
-  const messagesLimited = limitMessageTokens(
-    messages,
-    reduceMessagesToTotalToken,
-    model
+  const messagesLimited = useMemo(
+    () => limitMessageTokens(messages, reduceMessagesToTotalToken, model),
+    [messages, model]
   );
 
   // A turn that uses a tool is stored as several messages — the assistant's
@@ -81,7 +79,8 @@ const ChatContent = () => {
     const textOf = (m: MessageInterface) =>
       String((m.content?.[0] as TextContentInterface)?.text ?? '');
 
-    messagesLimited.forEach((message, index) => {
+    messagesLimited.forEach((message) => {
+      const index = messages.indexOf(message);
       if (message.role === 'assistant' && message.tool_calls) {
         const { reasoning } = splitThinking(textOf(message));
         if (reasoning) pending.push({ kind: 'reasoning', text: reasoning });
@@ -107,28 +106,12 @@ const ChatContent = () => {
       const last = messagesLimited[messagesLimited.length - 1];
       rows.push({
         message: last,
-        index: messagesLimited.length - 1,
+        index: messages.indexOf(last),
         steps: pending,
       });
     }
     return rows;
-  }, [messagesLimited]);
-
-  const handleReduceMessages = () => {
-    const confirmMessage = t('reduceMessagesWarning');
-    if (window.confirm(confirmMessage)) {
-      const updatedChats = JSON.parse(
-        JSON.stringify(useStore.getState().chats)
-      );
-      const removedMessagesCount = messages.length - messagesLimited.length;
-      updatedChats[currentChatIndex].messages = messagesLimited;
-      setChats(updatedChats);
-      addToast(
-        'success',
-        t('reduceMessagesSuccess', { count: removedMessagesCount })
-      );
-    }
-  };
+  }, [messagesLimited, messages]);
 
   useEffect(() => {
     if (!generating) {
@@ -260,12 +243,14 @@ const ChatContent = () => {
                     (advancedMode ||
                       index !== 0 ||
                       message.role !== 'system') && (
-                      <React.Fragment key={index}>
+                      <React.Fragment key={message.id ?? index}>
                         <Message
                           role={message.role}
                           content={message.content}
                           messageIndex={index}
                           priorSteps={steps}
+                          generationStatus={message.generationStatus}
+                          generationError={message.generationError}
                         />
                         {!generating && advancedMode && (
                           <NewMessageButton messageIndex={index} />

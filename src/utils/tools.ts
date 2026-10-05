@@ -18,8 +18,8 @@ import { ToolCallInterface } from '@type/chat';
  * pages fail with `TypeError: Failed to fetch`.
  *
  * The privacy cost is real and is why the toggle ships off: the URL being read
- * is disclosed to this third party. Nothing else in the app leaves the device
- * except the model request itself.
+ * is disclosed to this third party, separately from model requests and any
+ * optional Drive synchronization.
  */
 const READER_ENDPOINT = 'https://r.jina.ai/';
 
@@ -124,6 +124,25 @@ const parseUrlArgument = (rawArguments: string): string => {
   if (candidate.protocol !== 'http:' && candidate.protocol !== 'https:') {
     throw new Error(`unsupported scheme "${candidate.protocol}"`);
   }
+  if (
+    candidate.username ||
+    candidate.password ||
+    candidate.toString().length > 8192
+  ) {
+    throw new Error('URL credentials and oversized URLs are not allowed');
+  }
+  const host = candidate.hostname.toLowerCase();
+  if (
+    host === 'localhost' ||
+    host.endsWith('.localhost') ||
+    host.endsWith('.local') ||
+    /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.)/.test(
+      host
+    ) ||
+    host.startsWith('[')
+  ) {
+    throw new Error('only public web URLs may be read');
+  }
   return candidate.toString();
 };
 
@@ -150,8 +169,11 @@ const fetchFailed = (url: string, reason: string) =>
  */
 export const executeToolCall = async (
   call: ToolCallInterface,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  allowed = false
 ): Promise<ToolResult> => {
+  if (!allowed) throw new Error('URL fetching is disabled for this request.');
+  signal?.throwIfAborted();
   if (call.function.name !== FETCH_URL_TOOL.function.name) {
     return {
       content: `Error: unknown tool "${call.function.name}".`,
@@ -177,6 +199,8 @@ export const executeToolCall = async (
     }
   })();
 
+  const timeout = AbortSignal.timeout(30_000);
+  const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     // Some sites serve an ad or consent interstitial to the reader's crawler
     // instead of the page, and either the cache or a live crawl can be the one
@@ -189,16 +213,42 @@ export const executeToolCall = async (
 
     for (const fresh of [false, true]) {
       const response = await fetch(READER_ENDPOINT + url, {
-        signal,
+        signal: requestSignal,
         headers: {
           Accept: 'text/plain',
           ...(fresh ? { 'x-no-cache': 'true' } : {}),
         },
       });
       status = response.status;
-      if (!response.ok) continue;
-
-      text = await response.text();
+      if (!response.ok) {
+        await response.body?.cancel();
+        continue;
+      }
+      if (!response.body) continue;
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let bytes = 0;
+      text = '';
+      try {
+        while (bytes < 100_000 && text.length <= MAX_CONTENT_CHARS) {
+          const { done, value } = await reader.read();
+          if (done) {
+            text += decoder.decode();
+            break;
+          }
+          bytes += value.byteLength;
+          text += decoder.decode(
+            value.subarray(
+              0,
+              Math.max(0, 100_000 - (bytes - value.byteLength))
+            ),
+            { stream: true }
+          );
+        }
+      } finally {
+        await reader.cancel();
+        reader.releaseLock();
+      }
       if (!looksUnreadable(text)) break;
       text = '';
     }

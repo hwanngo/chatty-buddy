@@ -6,6 +6,7 @@ const downloadFile = (data: object, filename: string) => {
   link.download = filename;
   link.click();
   link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 };
 
 export default downloadFile;

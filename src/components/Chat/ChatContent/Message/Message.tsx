@@ -1,13 +1,23 @@
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import useSubmit from '@hooks/useSubmit';
+import useModelsReady from '@hooks/useModelsReady';
+import { estimateUsageCost, formatEstimatedCost } from '@utils/usageCost';
 import useStore from '@store/store';
 
+import { isToolGroupMessage } from './messageMutation';
 import Avatar from './Avatar';
 import MessageContent from './MessageContent';
 import RoleSelector from './RoleSelector';
 import TokenCount from '@components/TokenCount';
 import PromptLibraryPicker from '@components/PromptLibraryMenu/PromptLibraryPicker';
 
-import { ContentInterface, Role, TextContentInterface } from '@type/chat';
+import {
+  ContentInterface,
+  Role,
+  TextContentInterface,
+  MessageInterface,
+} from '@type/chat';
 import type { TimelineStep } from '@components/AgentActivity';
 import countTokens from '@utils/messageUtils';
 import { modelCost } from '@constants/modelLoader';
@@ -26,6 +36,8 @@ const Message = React.memo(
     messageIndex,
     sticky = false,
     priorSteps,
+    generationStatus,
+    generationError,
   }: {
     role: Role;
     content: ContentInterface[];
@@ -33,7 +45,18 @@ const Message = React.memo(
     sticky?: boolean;
     /** Activity absorbed from intermediate tool-round messages, if any. */
     priorSteps?: TimelineStep[];
+    generationStatus?: MessageInterface['generationStatus'];
+    generationError?: string;
   }) => {
+    const { t } = useTranslation();
+    const modelsReady = useModelsReady();
+    const { handleSubmit } = useSubmit();
+    const generating = useStore((state) => state.generating);
+    const isLast = useStore(
+      (state) =>
+        messageIndex ===
+        (state.chats?.[state.currentChatIndex]?.messages.length ?? 0) - 1
+    );
     const advancedMode = useStore((state) => state.advancedMode);
     const model = useStore((state) =>
       state.chats &&
@@ -46,6 +69,12 @@ const Message = React.memo(
 
     const setChats = useStore((state) => state.setChats);
     const currentChatIndex = useStore((state) => state.currentChatIndex);
+    const toolGroup = useStore((state) =>
+      isToolGroupMessage(
+        state.chats?.[state.currentChatIndex]?.messages ?? [],
+        messageIndex
+      )
+    );
     const [isDelete, setIsDelete] = useState(false);
 
     const bg = roleBg[role] ?? roleBg.user;
@@ -55,18 +84,31 @@ const Message = React.memo(
       try {
         const tokens = countTokens([{ role, content }], model as ModelOptions);
         const modelCostEntry = modelCost[model as keyof typeof modelCost];
-        let cost = 0;
-        if (modelCostEntry) {
-          const { prompt } = modelCostEntry;
-          cost = (prompt.price / prompt.unit) * tokens;
-        }
+        const cost = estimateUsageCost(
+          {
+            promptTokens: role === 'assistant' ? 0 : tokens,
+            completionTokens: role === 'assistant' ? tokens : 0,
+            imageTokens: content.filter((part) => part.type === 'image_url')
+              .length,
+          },
+          modelCostEntry
+        );
         return { tokens, cost };
       } catch {
         return { tokens: 0, cost: 0 };
       }
-    }, [role, content, model, sticky]);
+    }, [role, content, model, sticky, modelsReady, modelCost]);
 
     const handleDelete = () => {
+      const state = useStore.getState();
+      if (
+        state.generating ||
+        isToolGroupMessage(
+          state.chats?.[state.currentChatIndex]?.messages ?? [],
+          messageIndex
+        )
+      )
+        return;
       const currentChatIndex = useStore.getState().currentChatIndex;
       const updatedChats = JSON.parse(
         JSON.stringify(useStore.getState().chats)
@@ -81,7 +123,7 @@ const Message = React.memo(
       >
         {advancedMode && (
           <div
-            className={`flex items-center gap-2.5 border-b border-[var(--border)] bg-[rgba(0,0,0,0.02)] dark:bg-[rgba(255,255,255,0.025)] ${sticky ? 'px-3 py-1.5' : 'px-4 py-2.5'}`}
+            className={`flex flex-wrap items-center gap-2.5 border-b border-[var(--border)] bg-[rgba(0,0,0,0.02)] dark:bg-[rgba(255,255,255,0.025)] ${sticky ? 'px-3 py-1.5' : 'px-4 py-2.5'}`}
           >
             <Avatar role={role} />
             <RoleSelector
@@ -89,10 +131,11 @@ const Message = React.memo(
               messageIndex={messageIndex}
               sticky={sticky}
             />
-            <div className='flex-1' />
+            <div className='flex-1 min-w-0' />
             {role === 'system' && !sticky && (
               <PromptLibraryPicker
                 onSelect={(text) => {
+                  if (useStore.getState().generating) return;
                   const updatedChats = JSON.parse(
                     JSON.stringify(useStore.getState().chats)
                   );
@@ -106,17 +149,20 @@ const Message = React.memo(
             {sticky && advancedMode && <TokenCount />}
             {!sticky && tokenInfo.tokens > 0 && (
               <span className='text-[11px] text-[var(--fg-3)] font-mono tabular-nums'>
-                {tokenInfo.tokens} tokens ·{' '}
-                {tokenInfo.cost < 0.01
-                  ? '<$0.01'
-                  : `$${tokenInfo.cost.toFixed(4)}`}
+                {tokenInfo.tokens} {t('estimatedTokens')} ·{' '}
+                {formatEstimatedCost(tokenInfo.cost, t('unknownCost'))}
               </span>
             )}
             {!isDelete && !sticky && (
               <button
                 className='p-1 rounded-md text-[var(--fg-3)] hover:text-[var(--error)] hover:bg-[var(--border)] transition-colors cursor-pointer'
                 aria-label='delete message'
-                onClick={() => setIsDelete(true)}
+                disabled={generating || toolGroup}
+                title={toolGroup ? t('toolStructureLocked') : undefined}
+                onClick={() => {
+                  if (!useStore.getState().generating && !toolGroup)
+                    setIsDelete(true);
+                }}
               >
                 <svg
                   width='13'
@@ -172,6 +218,52 @@ const Message = React.memo(
                   </svg>
                 </button>
               </>
+            )}
+          </div>
+        )}
+        {(generationStatus === 'failed' ||
+          generationStatus === 'cancelled') && (
+          <div
+            role='status'
+            className='px-4 py-3 text-sm border-b border-[var(--border)] text-[var(--fg-2)]'
+          >
+            <p className='font-medium'>
+              {t(
+                generationStatus === 'failed'
+                  ? 'generationFailed'
+                  : 'generationCancelled'
+              )}
+            </p>
+            {generationError && (
+              <p className='mt-1 break-words'>{generationError}</p>
+            )}
+            {isLast && (
+              <button
+                type='button'
+                disabled={generating}
+                className='btn btn-neutral mt-2'
+                onClick={() => {
+                  if (useStore.getState().generating) return;
+                  const state = useStore.getState();
+                  const chat = state.chats?.[state.currentChatIndex];
+                  if (!chat || messageIndex !== chat.messages.length - 1)
+                    return;
+                  try {
+                    state.setChats(
+                      state.chats!.map((item, i) =>
+                        i === state.currentChatIndex
+                          ? { ...item, messages: item.messages.slice(0, -1) }
+                          : item
+                      )
+                    );
+                    void handleSubmit();
+                  } catch (error) {
+                    state.addToast('error', (error as Error).message);
+                  }
+                }}
+              >
+                {t('retryGeneration')}
+              </button>
             )}
           </div>
         )}

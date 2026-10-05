@@ -1,420 +1,95 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { v4 as uuidv4 } from 'uuid';
-
 import useStore from '@store/store';
-
 import {
-  importOpenAIChatExport,
-  isLegacyImport,
-  isOpenAIContent,
-  PartialImportError,
-  validateAndFixChats,
-  validateExportV1,
+  MAX_IMPORT_BYTES,
+  mergeChatImport,
+  parseChatImport,
 } from '@utils/import';
-
 import { modelOptions } from '@constants/modelLoader';
-
-// Helper to detect and warn about model IDs the current model list doesn't
-// contain. The import itself still goes through: the list depends on the
-// configured API endpoint, so a chat exported against a different endpoint
-// carries a perfectly valid id this session simply can't serve.
-const warnUnsupportedModels = (
-  chats: any[],
-  t: (key: string, opts?: any) => string
-) => {
-  const unsupportedModels = Array.from(
-    new Set(
-      chats
-        .map((c: any) => c?.config?.model)
-        .filter((id: string | undefined) => id && !modelOptions.includes(id))
-    )
-  );
-
-  if (unsupportedModels.length > 0) {
-    const msg =
-      t('notifications.unsupportedModels', {
-        ns: 'import',
-        models: unsupportedModels.join(', '),
-      }) ||
-      `Imported chats use model(s) the current endpoint doesn't list: ${unsupportedModels.join(', ')}. Pick another model for those chats, or add them under Settings → Custom Models.`;
-    useStore.getState().addToast('warning', msg);
-    return true;
-  }
-  return false;
-};
-
-import { ChatInterface, Folder, FolderCollection } from '@type/chat';
-import { ExportBase } from '@type/export';
-
-type ImportResult = {
-  success: boolean;
-  message: string;
-};
 
 const ImportChat = () => {
   const { t } = useTranslation(['main', 'import']);
-  const setChats = useStore.getState().setChats;
-  const setFolders = useStore.getState().setFolders;
   const inputRef = useRef<HTMLInputElement>(null);
   const [alert, setAlert] = useState<{
     message: string;
     success: boolean;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const handleFileUpload = () => {
-    if (!inputRef || !inputRef.current) return;
-    const file = inputRef.current.files?.[0];
-    if (file) setIsLoading(true);
-    var shouldAllowPartialImport = false;
-    if (file) {
-      const reader = new FileReader();
-
-      reader.onload = async (event) => {
-        const data = event.target?.result as string;
-        const originalChats = JSON.parse(
-          JSON.stringify(useStore.getState().chats)
+  const handleFileUpload = async () => {
+    const file = inputRef.current?.files?.[0];
+    if (!file) {
+      setAlert({
+        success: false,
+        message: t('selectImportFile', {
+          defaultValue: 'Choose a JSON file first.',
+        }),
+      });
+      return;
+    }
+    setIsLoading(true);
+    setAlert(null);
+    try {
+      if (file.size > MAX_IMPORT_BYTES)
+        throw new Error(
+          t('importTooLarge', {
+            defaultValue: 'Choose a JSON file smaller than 20 MB.',
+          })
         );
-        const originalFolders = JSON.parse(
-          JSON.stringify(useStore.getState().folders)
+      const imported = parseChatImport(JSON.parse(await file.text()));
+      if (!imported.chats.length)
+        throw new Error(
+          t('importEmpty', {
+            defaultValue: 'This file contains no conversations.',
+          })
         );
-        var originalParsedData: any;
-        const importData = async (
-          parsedData: any,
-          shouldReduce = false,
-          type: string = ''
-        ): Promise<ImportResult> => {
-          let chatsToImport = parsedData;
-          let removedChatsCount = 0;
-          while (true) {
-            try {
-              if (type === 'OpenAIContent' || isOpenAIContent(chatsToImport)) {
-                const chats = importOpenAIChatExport(
-                  chatsToImport,
-                  shouldAllowPartialImport
-                );
-                const prevChats: ChatInterface[] = JSON.parse(
-                  JSON.stringify(useStore.getState().chats)
-                );
-                setChats(chats.concat(prevChats));
-                if (removedChatsCount > 0) {
-                  useStore
-                    .getState()
-                    .addToast(
-                      'success',
-                      `${t('reduceMessagesSuccess', { count: removedChatsCount })}. ${t('notifications.chatsImported', { ns: 'import', imported: chats.length, total: originalParsedData.length })}`
-                    );
-                }
-                if (chats.length > 0) {
-                  return {
-                    success: true,
-                    message: t('notifications.successfulImport', {
-                      ns: 'import',
-                    }),
-                  };
-                } else {
-                  return {
-                    success: false,
-                    message: t('notifications.quotaExceeded', {
-                      ns: 'import',
-                    }),
-                  };
-                }
-              } else if (
-                type === 'LegacyImport' ||
-                isLegacyImport(chatsToImport)
-              ) {
-                if (validateAndFixChats(chatsToImport)) {
-                  // Unknown model ids no longer block the import; flag them so
-                  // the user knows why those chats can't be sent as-is.
-                  warnUnsupportedModels(chatsToImport, t);
-
-                  // import new folders
-                  const folderNameToIdMap: Record<string, string> = {};
-                  const parsedFolders: string[] = [];
-
-                  chatsToImport.forEach((data) => {
-                    const folder = data.folder;
-                    if (folder) {
-                      if (!parsedFolders.includes(folder)) {
-                        parsedFolders.push(folder);
-                        folderNameToIdMap[folder] = uuidv4();
-                      }
-                      data.folder = folderNameToIdMap[folder];
-                    }
-                  });
-
-                  const newFolders: FolderCollection = parsedFolders.reduce(
-                    (acc, curr, index) => {
-                      const id = folderNameToIdMap[curr];
-                      const _newFolder: Folder = {
-                        id,
-                        name: curr,
-                        expanded: false,
-                        order: index,
-                      };
-                      return { [id]: _newFolder, ...acc };
-                    },
-                    {}
-                  );
-
-                  // increment the order of existing folders
-                  const offset = parsedFolders.length;
-
-                  const updatedFolders = useStore.getState().folders;
-                  Object.values(updatedFolders).forEach(
-                    (f) => (f.order += offset)
-                  );
-
-                  setFolders({ ...newFolders, ...updatedFolders });
-
-                  // import chats
-                  const prevChats = useStore.getState().chats;
-                  if (prevChats) {
-                    const updatedChats: ChatInterface[] = JSON.parse(
-                      JSON.stringify(prevChats)
-                    );
-                    setChats(chatsToImport.concat(updatedChats));
-                  } else {
-                    setChats(chatsToImport);
-                  }
-                  if (removedChatsCount > 0) {
-                    useStore
-                      .getState()
-                      .addToast(
-                        'success',
-                        `${t('reduceMessagesSuccess', { count: removedChatsCount })}. ${t('notifications.chatsImported', { ns: 'import', imported: chatsToImport.length, total: originalParsedData.length })}`
-                      );
-                  }
-                  if (chatsToImport.length > 0) {
-                    return {
-                      success: true,
-                      message: t('notifications.successfulImport', {
-                        ns: 'import',
-                      }),
-                    };
-                  } else {
-                    return {
-                      success: false,
-                      message: t('notifications.nothingImported', {
-                        ns: 'import',
-                      }),
-                    };
-                  }
-                } else {
-                  // No model warning here any more: an unknown model id can no
-                  // longer be why validation failed, so raising it would point
-                  // at the wrong thing.
-                  return {
-                    success: false,
-                    message: t('notifications.invalidChatsDataFormat', {
-                      ns: 'import',
-                    }),
-                  };
-                }
-              } else {
-                switch ((parsedData as ExportBase).version) {
-                  case 1:
-                    if (validateExportV1(parsedData)) {
-                      warnUnsupportedModels(parsedData.chats ?? [], t);
-
-                      // increment the order of existing folders
-                      const offset = Object.keys(parsedData.folders).length;
-
-                      const updatedFolders = useStore.getState().folders;
-                      Object.values(updatedFolders).forEach(
-                        (f) => (f.order += offset)
-                      );
-
-                      setFolders({ ...parsedData.folders, ...updatedFolders });
-
-                      // import chats
-                      const prevChats = useStore.getState().chats;
-                      if (parsedData.chats) {
-                        if (prevChats) {
-                          const updatedChats: ChatInterface[] = JSON.parse(
-                            JSON.stringify(prevChats)
-                          );
-                          setChats(parsedData.chats.concat(updatedChats));
-                        } else {
-                          setChats(parsedData.chats);
-                        }
-                      }
-                      if (
-                        removedChatsCount > 0 &&
-                        parsedData.chats &&
-                        parsedData.chats.length > 0
-                      ) {
-                        useStore
-                          .getState()
-                          .addToast(
-                            'success',
-                            `${t('reduceMessagesSuccess', { count: removedChatsCount })}. ${t('notifications.chatsImported', { ns: 'import', imported: originalParsedData.chats.length - removedChatsCount, total: originalParsedData.chats.length })}`
-                          );
-                      }
-
-                      if (parsedData.chats && parsedData.chats.length > 0) {
-                        return {
-                          success: true,
-                          message: t('notifications.successfulImport', {
-                            ns: 'import',
-                          }),
-                        };
-                      } else {
-                        return {
-                          success: false,
-                          message: t('notifications.quotaExceeded', {
-                            ns: 'import',
-                          }),
-                        };
-                      }
-                    } else {
-                      return {
-                        success: false,
-                        message: t('notifications.invalidFormatForVersion', {
-                          ns: 'import',
-                        }),
-                      };
-                    }
-                  default:
-                    return {
-                      success: false,
-                      message: t('notifications.unrecognisedDataFormat', {
-                        ns: 'import',
-                      }),
-                    };
-                }
-              }
-            } catch (error: unknown) {
-              if ((error as DOMException).name === 'QuotaExceededError') {
-                setChats(originalChats);
-                setFolders(originalFolders);
-                if (type === 'ExportV1') {
-                  if (chatsToImport.chats.length > 0) {
-                    if (shouldReduce) {
-                      chatsToImport.chats.pop();
-                      removedChatsCount++;
-                    } else {
-                      const confirmMessage = t(
-                        'reduceMessagesFailedImportWarning'
-                      );
-                      if (window.confirm(confirmMessage)) {
-                        return await importData(parsedData, true, type);
-                      } else {
-                        return {
-                          success: false,
-                          message: t('notifications.quotaExceeded', {
-                            ns: 'import',
-                          }),
-                        };
-                      }
-                    }
-                  } else {
-                    return {
-                      success: false,
-                      message: t('notifications.quotaExceeded', {
-                        ns: 'import',
-                      }),
-                    };
-                  }
-                } else {
-                  if (chatsToImport.length > 0) {
-                    if (shouldReduce) {
-                      chatsToImport.pop();
-                      removedChatsCount++;
-                    } else {
-                      const confirmMessage = t(
-                        'reduceMessagesFailedImportWarning'
-                      );
-                      if (window.confirm(confirmMessage)) {
-                        return await importData(parsedData, true, type);
-                      } else {
-                        return {
-                          success: false,
-                          message: t('notifications.quotaExceeded', {
-                            ns: 'import',
-                          }),
-                        };
-                      }
-                    }
-                  } else {
-                    return {
-                      success: false,
-                      message: t('notifications.quotaExceeded', {
-                        ns: 'import',
-                      }),
-                    };
-                  }
-                }
-              } else if (error instanceof PartialImportError) {
-                // Handle PartialImportError
-                const confirmMessage = t('partialImportWarning', {
-                  message: error.message,
-                });
-
-                if (window.confirm(confirmMessage)) {
-                  shouldAllowPartialImport = true;
-                  // User chose to continue with the partial import
-                  return await importData(parsedData, true, type);
-                } else {
-                  // User chose not to proceed with the partial import
-                  return {
-                    success: false,
-                    message: t('notifications.nothingImported', {
-                      ns: 'import',
-                    }),
-                  };
-                }
-              } else {
-                return { success: false, message: (error as Error).message };
-              }
-            }
-          }
-        };
-
-        try {
-          const parsedData = JSON.parse(data);
-          originalParsedData = JSON.parse(data);
-          let type = '';
-          if (isOpenAIContent(parsedData)) {
-            type = 'OpenAIContent';
-          } else if (isLegacyImport(parsedData)) {
-            type = 'LegacyImport';
-          } else if ((parsedData as ExportBase).version === 1) {
-            type = 'ExportV1';
-          }
-          const result = await importData(parsedData, false, type);
-          if (result.success) {
-            useStore.getState().addToast('success', result.message);
-            setAlert({ message: result.message, success: true });
-          } else {
-            setChats(originalChats);
-            setFolders(originalFolders);
-            useStore.getState().addToast('error', result.message);
-            setAlert({ message: result.message, success: false });
-          }
-        } catch (error: unknown) {
-          setChats(originalChats);
-          setFolders(originalFolders);
-          useStore.getState().addToast('error', (error as Error).message);
-          setAlert({ message: (error as Error).message, success: false });
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      reader.readAsText(file);
+      // One durable transaction: a quota failure leaves chats, folders and
+      // selection unchanged. Never silently truncate a user's backup.
+      useStore.setState(mergeChatImport(useStore.getState(), imported));
+      const unsupported = [
+        ...new Set(
+          imported.chats
+            .map((chat) => chat.config.model)
+            .filter((id) => !modelOptions.includes(id))
+        ),
+      ];
+      if (unsupported.length)
+        useStore.getState().addToast(
+          'warning',
+          t('notifications.unsupportedModels', {
+            ns: 'import',
+            models: unsupported.join(', '),
+          })
+        );
+      setAlert({
+        success: true,
+        message: t('notifications.successfulImport', { ns: 'import' }),
+      });
+    } catch (error) {
+      setAlert({
+        success: false,
+        message:
+          error instanceof Error
+            ? error.message
+            : t('importFailed', {
+                defaultValue:
+                  'Import failed. Your existing conversations are unchanged. Choose another file and try again.',
+              }),
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
-
   return (
     <div className='flex flex-col gap-3'>
       <div>
-        <p className='text-sm font-semibold text-[var(--fg)]'>
+        <label
+          htmlFor='chat-import-file'
+          className='text-sm font-semibold text-[var(--fg)]'
+        >
           {t('import')} (JSON)
-        </p>
-        <p className='text-xs text-[var(--fg-3)] mt-0.5'>
+        </label>
+        <p id='chat-import-help' className='text-xs text-[var(--fg-3)] mt-0.5'>
           {t('importDescription', {
             defaultValue:
               'Select a previously exported chat file to restore your conversations.',
@@ -422,7 +97,11 @@ const ImportChat = () => {
         </p>
       </div>
       <input
-        className='w-full text-sm file:px-3 file:py-1.5 file:mr-3 text-[var(--fg)] file:text-[var(--fg-2)] rounded-lg cursor-pointer focus:outline-none bg-[var(--bg-card)] file:bg-[var(--bg-sand)] file:border-0 border border-[var(--border-mid)] file:cursor-pointer file:rounded-md file:text-xs file:font-medium file:transition-colors hover:file:bg-[var(--ring)] py-1.5'
+        id='chat-import-file'
+        aria-describedby='chat-import-help'
+        accept='.json,application/json'
+        disabled={isLoading}
+        className='w-full text-sm file:px-3 file:py-1.5 file:mr-3 text-[var(--fg)] file:text-[var(--fg-2)] rounded-lg cursor-pointer bg-[var(--bg-card)] file:bg-[var(--bg-sand)] file:border-0 border border-[var(--border-mid)] file:cursor-pointer file:rounded-md file:text-xs file:font-medium py-1.5'
         type='file'
         ref={inputRef}
       />
@@ -431,7 +110,6 @@ const ImportChat = () => {
           className='btn btn-small btn-primary disabled:opacity-50 disabled:cursor-not-allowed'
           onClick={handleFileUpload}
           disabled={isLoading}
-          aria-label={t('import') as string}
         >
           {isLoading
             ? t('importing', { defaultValue: 'Importing…' })
@@ -440,11 +118,8 @@ const ImportChat = () => {
       </div>
       {alert && (
         <div
-          className={`py-2 px-3 w-full border rounded-lg text-sm whitespace-pre-wrap ${
-            alert.success
-              ? 'border-green-500/50 bg-green-500/10 text-[var(--success)]'
-              : 'border-red-500/50 bg-red-500/10 text-[var(--error)]'
-          }`}
+          role={alert.success ? 'status' : 'alert'}
+          className={`py-2 px-3 w-full border rounded-lg text-sm whitespace-pre-wrap ${alert.success ? 'border-[var(--success)] text-[var(--success)]' : 'border-[var(--error)] text-[var(--error)]'}`}
         >
           {alert.message}
         </div>
@@ -452,5 +127,4 @@ const ImportChat = () => {
     </div>
   );
 };
-
 export default ImportChat;

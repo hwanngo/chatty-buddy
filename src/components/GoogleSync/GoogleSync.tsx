@@ -12,7 +12,10 @@ import {
   validateGoogleOath2AccessToken,
 } from '@api/google-api';
 import { getFiles, stateToFile } from '@utils/google-api';
-import createGoogleCloudStorage from '@store/storage/GoogleCloudStorage';
+import {
+  startCloudSync,
+  stopCloudSync,
+} from '@store/storage/GoogleCloudStorage';
 
 import GoogleSyncButton from './GoogleSyncButton';
 import Dialog from '@components/Dialog';
@@ -34,48 +37,57 @@ const GoogleSync = ({ clientId }: { clientId: string }) => {
   const [isModalOpen, setIsModalOpen] = useState<boolean>(cloudSync);
   const [files, setFiles] = useState<GoogleFileResource[]>([]);
 
-  const initialiseState = async (_googleAccessToken: string) => {
-    const validated = await validateGoogleOath2AccessToken(_googleAccessToken);
-    if (validated) {
-      try {
-        const _files = await getFiles(_googleAccessToken);
-        if (_files) {
-          setFiles(_files);
-          if (_files.length === 0) {
-            // _files is empty, create new file in google drive and set the file id
-            const googleFile = await createDriveFile(
-              stateToFile(),
-              _googleAccessToken
-            );
-            setFileId(googleFile.id);
-          } else {
-            if (_files.findIndex((f) => f.id === fileId) !== -1) {
-              // local storage file id matches one of the file ids returned
-              setFileId(fileId);
-            } else {
-              // default set file id to the latest one
-              setFileId(_files[0].id);
-            }
-          }
-          useStore.persist.setOptions({
-            storage: createGoogleCloudStorage(),
-          });
-          useStore.persist.rehydrate();
-        }
-      } catch (e: unknown) {
-        console.log(e);
-      }
-    } else {
-      setSyncStatus('unauthenticated');
-    }
-  };
-
   useEffect(() => {
-    if (googleAccessToken) {
-      setSyncStatus('syncing');
-      initialiseState(googleAccessToken);
-    }
-  }, [googleAccessToken]);
+    if (!googleAccessToken || !cloudSync) return;
+    const controller = new AbortController();
+    const initialise = async () => {
+      try {
+        setSyncStatus('syncing');
+        await validateGoogleOath2AccessToken(
+          googleAccessToken,
+          controller.signal
+        );
+        const available = await getFiles(googleAccessToken, controller.signal);
+        if (controller.signal.aborted) return;
+        setFiles(available);
+        const selected =
+          available.find((file) => file.id === fileId) ?? available[0];
+        const id =
+          selected?.id ??
+          (
+            await createDriveFile(
+              stateToFile(),
+              googleAccessToken,
+              undefined,
+              controller.signal
+            )
+          ).id;
+        if (controller.signal.aborted) return;
+        setFileId(id);
+        await startCloudSync(id, googleAccessToken);
+        if (!controller.signal.aborted)
+          setFiles(await getFiles(googleAccessToken, controller.signal));
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setSyncStatus('unauthenticated');
+        useStore
+          .getState()
+          .addToast(
+            'error',
+            error instanceof Error
+              ? error.message
+              : 'Could not connect to Google Drive. Local data is saved.'
+          );
+      }
+    };
+    void initialise();
+    return () => {
+      controller.abort();
+      stopCloudSync();
+    };
+    // Selection changes are handled explicitly in the dialog, without
+    // restarting a session during the initial setFileId operation.
+  }, [googleAccessToken, cloudSync]);
 
   return (
     <GoogleOAuthProvider clientId={clientId}>
@@ -85,7 +97,7 @@ const GoogleSync = ({ clientId }: { clientId: string }) => {
           setIsModalOpen(true);
         }}
       >
-        <Icon name="google" /> {t('name')}
+        <Icon name='google' /> {t('name')}
         {cloudSync && <SyncIcon status={syncStatus} />}
       </button>
       {isModalOpen && (
@@ -111,28 +123,33 @@ const GooglePopup = ({
   const { t } = useTranslation(['drive']);
 
   const syncStatus = useGStore((state) => state.syncStatus);
-  const setSyncStatus = useGStore((state) => state.setSyncStatus);
   const cloudSync = useGStore((state) => state.cloudSync);
   const googleAccessToken = useGStore((state) => state.googleAccessToken);
   const setFileId = useGStore((state) => state.setFileId);
 
   const addToast = useStore((state) => state.addToast);
 
+  const selectedFileId = useGStore((state) => state.fileId);
+  const [isCreating, setIsCreating] = useState(false);
   const [_fileId, _setFileId] = useState<string>(
     useGStore.getState().fileId || ''
   );
 
+  useEffect(() => {
+    _setFileId(selectedFileId ?? '');
+  }, [selectedFileId]);
+
   const createSyncFile = async () => {
     if (!googleAccessToken) return;
     try {
-      setSyncStatus('syncing');
+      setIsCreating(true);
       await createDriveFile(stateToFile(), googleAccessToken);
       const _files = await getFiles(googleAccessToken);
       if (_files) setFiles(_files);
-      setSyncStatus('synced');
     } catch (e: unknown) {
-      setSyncStatus('unauthenticated');
       addToast('error', (e as Error).message);
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -144,14 +161,7 @@ const GooglePopup = ({
     >
       <div className='p-6 border-b border-[var(--border)] text-[var(--fg-2)] text-sm flex flex-col items-center gap-4 text-center'>
         <p>{t('tagline')}</p>
-        <GoogleSyncButton
-          loginHandler={() => {
-            setIsModalOpen(false);
-            window.setTimeout(() => {
-              setIsModalOpen(true);
-            }, 3540000); // timeout - 3540000ms = 59 min (access token last 60 min)
-          }}
-        />
+        <GoogleSyncButton loginHandler={() => setIsModalOpen(false)} />
         <p className='border border-[var(--border-mid)] px-3 py-2 rounded-lg text-[var(--fg-2)]'>
           {t('notice')}
         </p>
@@ -169,23 +179,33 @@ const GooglePopup = ({
             ))}
             {syncStatus !== 'syncing' && (
               <div className='flex gap-4 flex-wrap justify-center'>
-                <div
+                <button
+                  type='button'
                   className='btn btn-primary cursor-pointer'
                   onClick={async () => {
-                    setFileId(_fileId);
-                    await useStore.persist.rehydrate();
-                    addToast('success', t('toast.sync'));
-                    setIsModalOpen(false);
+                    if (!googleAccessToken || !_fileId) return;
+                    try {
+                      await startCloudSync(_fileId, googleAccessToken);
+                      setFileId(_fileId);
+                      addToast('success', t('toast.sync'));
+                      setIsModalOpen(false);
+                    } catch {
+                      /* Sync service preserves local data and reports failure. */
+                    }
                   }}
                 >
                   {t('button.confirm')}
-                </div>
-                <div
+                </button>
+                <button
+                  type='button'
                   className='btn btn-neutral cursor-pointer'
+                  disabled={isCreating}
                   onClick={createSyncFile}
                 >
-                  {t('button.create')}
-                </div>
+                  {isCreating
+                    ? t('creating', { defaultValue: 'Creating…' })
+                    : t('button.create')}
+                </button>
               </div>
             )}
             <div className='h-4 w-4'>
@@ -194,6 +214,7 @@ const GooglePopup = ({
           </div>
         )}
         <p>{t('privacy')}</p>
+        <p className='text-xs text-[var(--fg-3)]'>{t('snapshotsNotice')}</p>
       </div>
     </Dialog>
   );
@@ -213,7 +234,6 @@ const FileSelector = ({
   setFiles: React.Dispatch<React.SetStateAction<GoogleFileResource[]>>;
 }) => {
   const syncStatus = useGStore((state) => state.syncStatus);
-  const setSyncStatus = useGStore((state) => state.setSyncStatus);
 
   const addToast = useStore((state) => state.addToast);
 
@@ -221,7 +241,8 @@ const FileSelector = ({
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [_name, _setName] = useState<string>(name);
 
-  const syncing = syncStatus === 'syncing';
+  const [isWorking, setIsWorking] = useState(false);
+  const syncing = syncStatus === 'syncing' || isWorking;
 
   const updateFileName = async () => {
     if (syncing) return;
@@ -230,15 +251,15 @@ const FileSelector = ({
     if (!accessToken) return;
 
     try {
-      setSyncStatus('syncing');
+      setIsWorking(true);
       const newFileName = _name.endsWith('.json') ? _name : _name + '.json';
       await updateDriveFileName(newFileName, id, accessToken);
       const _files = await getFiles(accessToken);
       if (_files) setFiles(_files);
-      setSyncStatus('synced');
     } catch (e: unknown) {
-      setSyncStatus('unauthenticated');
       addToast('error', (e as Error).message);
+    } finally {
+      setIsWorking(false);
     }
   };
 
@@ -249,25 +270,32 @@ const FileSelector = ({
     if (!accessToken) return;
 
     try {
-      setSyncStatus('syncing');
+      setIsWorking(true);
+      if (useGStore.getState().fileId === id) {
+        stopCloudSync();
+        useGStore.getState().setCloudSync(false);
+        useGStore.getState().setFileId(undefined);
+      }
       await deleteDriveFile(id, accessToken);
       const _files = await getFiles(accessToken);
       if (_files) setFiles(_files);
-      setSyncStatus('synced');
     } catch (e: unknown) {
-      setSyncStatus('unauthenticated');
       addToast('error', (e as Error).message);
+    } finally {
+      setIsWorking(false);
     }
   };
 
   return (
-    <label
+    <div
       className={`w-full flex items-center justify-between mb-2 gap-2 text-sm font-medium text-[var(--fg-btn)] ${
         syncing ? 'cursor-not-allowed opacity-40' : ''
       }`}
     >
       <input
         type='radio'
+        aria-label={name}
+        name='drive-backup-selection'
         checked={_fileId === id}
         className='w-4 h-4'
         onChange={() => {
@@ -279,6 +307,7 @@ const FileSelector = ({
         {isEditing ? (
           <input
             type='text'
+            aria-label='Backup filename'
             className='text-[var(--fg)] p-3 text-sm border-none bg-[var(--bg-sand)] rounded-lg m-0 w-full mr-0 h-8 focus:outline-none'
             value={_name}
             onChange={(e) => {
@@ -291,18 +320,29 @@ const FileSelector = ({
           </>
         )}
       </div>
+      {isDeleting && (
+        <span className='text-xs text-[var(--error)]'>
+          Delete this backup entry? Snapshot history remains in Drive.
+        </span>
+      )}
       {isEditing || isDeleting ? (
         <div className='flex gap-1'>
-          <div
+          <button
+            type='button'
+            disabled={syncing}
+            aria-label={isEditing ? 'Confirm rename' : 'Confirm deletion'}
             className={`${syncing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={() => {
               if (isEditing) updateFileName();
               if (isDeleting) deleteFile();
             }}
           >
-            <Icon name="tick" />
-          </div>
-          <div
+            <Icon name='tick' />
+          </button>
+          <button
+            type='button'
+            disabled={syncing}
+            aria-label='Cancel'
             className={`${syncing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={() => {
               if (!syncing) {
@@ -311,30 +351,36 @@ const FileSelector = ({
               }
             }}
           >
-            <Icon name="cross" />
-          </div>
+            <Icon name='cross' />
+          </button>
         </div>
       ) : (
         <div className='flex gap-1'>
-          <div
+          <button
+            type='button'
+            disabled={syncing}
+            aria-label={`Rename ${name}`}
             className={`${syncing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={() => {
               if (!syncing) setIsEditing(true);
             }}
           >
-            <Icon name="edit" />
-          </div>
-          <div
+            <Icon name='edit' />
+          </button>
+          <button
+            type='button'
+            disabled={syncing}
+            aria-label={`Delete ${name}`}
             className={`${syncing ? 'cursor-not-allowed' : 'cursor-pointer'}`}
             onClick={() => {
               if (!syncing) setIsDeleting(true);
             }}
           >
-            <Icon name="delete" />
-          </div>
+            <Icon name='delete' />
+          </button>
         </div>
       )}
-    </label>
+    </div>
   );
 };
 
@@ -347,12 +393,12 @@ const SyncIcon = ({ status }: { status: SyncStatus }) => {
     ),
     syncing: (
       <div className='bg-gray-600/80 rounded-full p-1 animate-spin'>
-        <Icon name="refresh" className='h-2 w-2' />
+        <Icon name='refresh' className='h-2 w-2' />
       </div>
     ),
     synced: (
       <div className='bg-gray-600/80 rounded-full p-1'>
-        <Icon name="tick" className='h-2 w-2' />
+        <Icon name='tick' className='h-2 w-2' />
       </div>
     ),
   };

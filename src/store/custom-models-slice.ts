@@ -27,44 +27,69 @@ export interface CustomModel {
 
 export interface CustomModelsSlice {
   customModels: CustomModel[];
-  addCustomModel: (model: Omit<CustomModel, 'architecture' | 'per_request_limits' | 'top_provider'> & {
-    architecture: Pick<CustomModel['architecture'], 'modality' | 'tokenizer' | 'instruct_type'>;
-  }) => void;
+  addCustomModel: (
+    model: Omit<
+      CustomModel,
+      'architecture' | 'per_request_limits' | 'top_provider'
+    > & {
+      architecture: Pick<
+        CustomModel['architecture'],
+        'modality' | 'tokenizer' | 'instruct_type'
+      >;
+      top_provider?: CustomModel['top_provider'];
+    }
+  ) => void;
   removeCustomModel: (modelId: string) => void;
 }
 
 const defaultModelValues = {
   architecture: {
     instruct_type: null,
-    tokenizer: 'cl100k_base'
+    tokenizer: 'cl100k_base',
   },
   per_request_limits: null,
   top_provider: {
     context_length: 128000,
     max_completion_tokens: 16384,
-    is_moderated: true
+    is_moderated: true,
   },
-  is_stream_supported: true
+  is_stream_supported: true,
 };
 
-export const createCustomModelsSlice: StoreSlice<CustomModelsSlice> = (set) => ({
+export const createCustomModelsSlice: StoreSlice<CustomModelsSlice> = (
+  set
+) => ({
   customModels: [],
   addCustomModel: (model) => {
+    if (
+      !model.id.trim() ||
+      !model.name.trim() ||
+      !Number.isFinite(model.context_length) ||
+      model.context_length < 1
+    )
+      return;
     set((state) => ({
       ...state,
       customModels: [
-        ...state.customModels,
+        ...state.customModels.filter((item) => item.id !== model.id.trim()),
         {
           ...defaultModelValues,
           ...model,
+          id: model.id.trim(),
+          name: model.name.trim(),
+          top_provider: {
+            ...defaultModelValues.top_provider,
+            context_length: model.context_length,
+            ...model.top_provider,
+          },
           architecture: {
             ...defaultModelValues.architecture,
             modality: model.architecture.modality,
             instruct_type: model.architecture.instruct_type,
-            tokenizer: model.architecture.tokenizer
-          }
-        }
-      ]
+            tokenizer: model.architecture.tokenizer,
+          },
+        },
+      ],
     }));
     // Reload models after adding a new one
     initializeModels();
@@ -73,11 +98,10 @@ export const createCustomModelsSlice: StoreSlice<CustomModelsSlice> = (set) => (
     set((state) => {
       const newState = {
         ...state,
-        customModels: state.customModels.filter((m) => m.id !== modelId)
+        customModels: state.customModels.filter((m) => m.id !== modelId),
       };
-      // Reload models after removing one
-      initializeModels();
       return newState;
     });
-  }
+    void initializeModels();
+  },
 });

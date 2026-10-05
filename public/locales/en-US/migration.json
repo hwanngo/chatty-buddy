@@ -1,9 +1,9 @@
 {
   "migration": {
-    "noPersistedState": "No persisted state found. Unable to reset version.",
-    "resetVersionButton": "Reset Version and Migrate",
-    "resetVersionDescription": "This will reset the version and trigger migrations.",
+    "noPersistedState": "No saved data was found.",
+    "resetVersionButton": "Validate and migrate saved data",
+    "resetVersionDescription": "Validate saved data and apply missing migrations from its recorded version.",
     "confirmTitle": "Confirm Migration",
-    "confirmMessage": "This action will reset your application state version and trigger migrations. Your data will be migrated to the latest version. Do you want to proceed?"
+    "confirmMessage": "Saved data will be validated and upgraded to the current format. Invalid data will be left unchanged with an error. Continue?"
   }
 }

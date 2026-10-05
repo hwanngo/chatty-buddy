@@ -114,5 +114,27 @@
   "toolFetched": "Đã tải",
   "toolFailed": "Tải thất bại",
   "readPages": "Đã đọc {{count}} trang",
-  "viewFetched": "Xem nội dung đã tải"
+  "viewFetched": "Xem nội dung đã tải",
+  "estimatedCost": "Chi phí ước tính",
+  "unknownCost": "Chưa rõ",
+  "partialCost": "Ước tính một phần",
+  "estimatedTokens": "Token ước tính",
+  "imageTooLarge": "Mỗi ảnh tối đa 2 MB; mỗi tin nhắn tối đa 4 ảnh.",
+  "fileReadError": "Không thể đọc tệp. Vui lòng thử lại.",
+  "generationFailed": "Không thể hoàn tất câu trả lời",
+  "generationCancelled": "Đã dừng tạo câu trả lời",
+  "retryGeneration": "Tạo lại câu trả lời",
+  "error": {
+    "eyebrow": "Đã xảy ra lỗi",
+    "title": "Khôi phục cuộc trò chuyện của bạn",
+    "message": "Ứng dụng không thể tiếp tục. Hãy thử lại hoặc tải lại trang.",
+    "retry": "Thử lại",
+    "reload": "Tải lại trang",
+    "storageHelp": "Nếu trình duyệt chặn bộ nhớ hoặc bộ nhớ đã đầy, hãy cho phép lưu trữ cho trang này hoặc giải phóng dung lượng thiết bị, rồi tải lại. Tải bản sao trước khi xóa dữ liệu trang. Màn hình khôi phục này không xóa các cuộc trò chuyện đã lưu.",
+    "downloadBackup": "Tải bản sao cục bộ",
+    "backupPrivacy": "Tệp khôi phục có thể chứa khóa API đã lưu và cuộc trò chuyện riêng tư. Hãy giữ tệp riêng tư.",
+    "noBackup": "Không tìm thấy bản sao cục bộ trong trình duyệt này.",
+    "backupUnavailable": "Không thể đọc hoặc tải bản sao. Cho phép trang lưu trữ dữ liệu trong cài đặt trình duyệt rồi thử lại. Dữ liệu đã lưu chưa bị xóa."
+  },
+  "toolStructureLocked": "Để giữ đúng thứ tự gọi công cụ, không thể di chuyển tin nhắn trong cuộc trò chuyện có công cụ, hoặc xóa, đổi vai trò hay tạo lại riêng từng phần của lượt dùng công cụ. Bạn vẫn có thể sửa nội dung hoặc bắt đầu một cuộc trò chuyện mới."
 }

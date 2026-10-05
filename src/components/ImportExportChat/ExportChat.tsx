@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import useStore from '@store/store';
@@ -6,7 +5,7 @@ import useStore from '@store/store';
 import downloadFile from '@utils/downloadFile';
 import { getToday } from '@utils/date';
 
-import Export from '@type/export';
+import { createChatExport } from '@utils/import';
 
 const ExportChat = () => {
   const { t } = useTranslation();
@@ -28,11 +27,10 @@ const ExportChat = () => {
         <button
           className='btn btn-small btn-primary'
           onClick={() => {
-            const fileData: Export = {
-              chats: useStore.getState().chats,
-              folders: useStore.getState().folders,
-              version: 1,
-            };
+            const fileData = createChatExport(
+              useStore.getState().chats,
+              useStore.getState().folders
+            );
             downloadFile(fileData, getToday());
           }}
           aria-label={t('export') as string}

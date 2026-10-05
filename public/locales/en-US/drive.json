@@ -1,16 +1,17 @@
 {
-  "name": "Google Sync",
-  "tagline": "Effortlessly synchronize your chats and settings with Google Drive.",
+  "name": "Google Drive backup",
+  "tagline": "Save snapshots of conversations and settings to Google Drive.",
   "button": {
-    "sync": "Sync your chats",
-    "stop": "Stop syncing",
-    "create": "Create new file",
-    "confirm": "Confirm selection"
+    "sync": "Connect backups",
+    "stop": "Disconnect backups",
+    "create": "Create snapshot",
+    "confirm": "Restore selected snapshot"
   },
-  "notice": "Note: You will need to re-login on every visit or every hour. To avoid your cloud data being overwritten, do not use chatty-buddy on more than one device at the same time.",
-  "privacy": "Your privacy is important to us, and to ensure it, chatty-buddy only has non-sensitive access, meaning it can only create, view, and manage its own files and folders.",
+  "notice": "Reconnect when the access token expires. Disconnecting keeps local edits. Restoring merges conversations while retaining local API endpoints, keys and preferences.",
+  "privacy": "Conversations are sent to Google. The drive.file scope limits access to app-authorized files. API keys and endpoints are excluded from backups.",
   "toast": {
     "sync": "Sync successful!",
     "stop": "Syncing stopped"
-  }
+  },
+  "snapshotsNotice": "Each backup creates a new snapshot without overwriting earlier ones. Snapshots remain until you delete them in Drive."
 }

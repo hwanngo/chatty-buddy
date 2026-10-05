@@ -25,6 +25,9 @@ const ConfigMenu = ({
   setImageDetail: (imageDetail: ImageDetail) => void;
 }) => {
   const [_maxToken, _setMaxToken] = useState<number>(config.max_tokens);
+  const [outputTokens, setOutputTokens] = useState<number | undefined>(
+    config.output_tokens
+  );
   const [_model, _setModel] = useState<ModelOptions>(config.model);
   const [_temperature, _setTemperature] = useState<number>(config.temperature);
   const [_presencePenalty, _setPresencePenalty] = useState<number>(
@@ -39,6 +42,8 @@ const ConfigMenu = ({
 
   const handleConfirm = () => {
     setConfig({
+      ...config,
+      output_tokens: outputTokens,
       max_tokens: _maxToken,
       model: _model,
       temperature: _temperature,
@@ -55,7 +60,6 @@ const ConfigMenu = ({
       title={t('configuration') as string}
       setIsModalOpen={setIsModalOpen}
       handleConfirm={handleConfirm}
-      handleClickBackdrop={handleConfirm}
     >
       <div className='p-6 border-b border-[var(--border-mid)]'>
         <ModelSelector
@@ -68,6 +72,7 @@ const ConfigMenu = ({
           _setMaxToken={_setMaxToken}
           _model={_model}
         />
+        <OutputTokenInput value={outputTokens} onChange={setOutputTokens} />
         <TemperatureSlider
           _temperature={_temperature}
           _setTemperature={_setTemperature}
@@ -121,15 +126,16 @@ export const ModelSelector = ({
 
   const modelOptionsFormatted = Array.from(new Set(localModelOptions)).map(
     (model) => {
-    const isCustom = customModels.some((m) => m.id === model);
-    const customModel = customModels.find((m) => m.id === model);
-    return {
-      value: model,
-      label: isCustom
-        ? `${customModel?.name} ${t('customModels.customLabel', { ns: 'model' })}`
-        : model,
-    };
-  });
+      const isCustom = customModels.some((m) => m.id === model);
+      const customModel = customModels.find((m) => m.id === model);
+      return {
+        value: model,
+        label: isCustom
+          ? `${customModel?.name} ${t('customModels.customLabel', { ns: 'model' })}`
+          : model,
+      };
+    }
+  );
 
   return (
     <div className='mb-4'>
@@ -172,6 +178,7 @@ export const MaxTokenSlider = ({
       <input
         type='range'
         ref={inputRef}
+        aria-label={t('token.label')}
         value={_maxToken}
         onChange={(e) => {
           _setMaxToken(Number(e.target.value));
@@ -184,6 +191,48 @@ export const MaxTokenSlider = ({
       <div className='min-w-fit text-[var(--fg-3)] text-sm mt-2'>
         {t('token.description')}
       </div>
+    </div>
+  );
+};
+
+export const OutputTokenInput = ({
+  value,
+  onChange,
+}: {
+  value?: number;
+  onChange: (value: number | undefined) => void;
+}) => {
+  const { t } = useTranslation('model');
+  return (
+    <div className='mt-5 pt-5 border-t border-[var(--border-mid)]'>
+      <label className='flex gap-2 items-center text-sm font-medium'>
+        <input
+          type='checkbox'
+          checked={value !== undefined}
+          onChange={(event) =>
+            onChange(event.target.checked ? 4096 : undefined)
+          }
+        />
+        {t('outputTokens.label')}
+      </label>
+      {value !== undefined && (
+        <input
+          type='number'
+          aria-label={t('outputTokens.label')}
+          min={1}
+          max={1048576}
+          value={value}
+          onChange={(event) =>
+            onChange(
+              Math.max(1, Math.min(1048576, Number(event.target.value) || 1))
+            )
+          }
+          className='mt-2 w-full px-3 py-2 border border-[var(--border-mid)] rounded-lg bg-[var(--bg-card)]'
+        />
+      )}
+      <p className='mt-2 text-sm text-[var(--fg-3)]'>
+        {t('outputTokens.description')}
+      </p>
     </div>
   );
 };
@@ -203,8 +252,8 @@ export const TemperatureSlider = ({
         {t('temperature.label')}: {_temperature}
       </label>
       <input
-        id='default-range'
         type='range'
+        aria-label={t('temperature.label')}
         value={_temperature}
         onChange={(e) => {
           _setTemperature(Number(e.target.value));
@@ -236,8 +285,8 @@ export const TopPSlider = ({
         {t('topP.label')}: {_topP}
       </label>
       <input
-        id='default-range'
         type='range'
+        aria-label={t('topP.label')}
         value={_topP}
         onChange={(e) => {
           _setTopP(Number(e.target.value));
@@ -269,8 +318,8 @@ export const PresencePenaltySlider = ({
         {t('presencePenalty.label')}: {_presencePenalty}
       </label>
       <input
-        id='default-range'
         type='range'
+        aria-label={t('presencePenalty.label')}
         value={_presencePenalty}
         onChange={(e) => {
           _setPresencePenalty(Number(e.target.value));
@@ -302,8 +351,8 @@ export const FrequencyPenaltySlider = ({
         {t('frequencyPenalty.label')}: {_frequencyPenalty}
       </label>
       <input
-        id='default-range'
         type='range'
+        aria-label={t('frequencyPenalty.label')}
         value={_frequencyPenalty}
         onChange={(e) => {
           _setFrequencyPenalty(Number(e.target.value));
@@ -345,6 +394,7 @@ export const ImageDetailSelector = ({
           <button
             key={value}
             type='button'
+            aria-pressed={_imageDetail === value}
             onClick={() => _setImageDetail(value)}
             className={`px-3 py-1.5 rounded-lg text-sm border transition-colors ${
               _imageDetail === value

@@ -114,5 +114,27 @@
   "toolFetched": "Fetched",
   "toolFailed": "Fetch failed",
   "readPages": "Read {{count}} pages",
-  "viewFetched": "View fetched content"
+  "viewFetched": "View fetched content",
+  "estimatedCost": "Estimated cost",
+  "unknownCost": "Unknown",
+  "partialCost": "Partial estimate",
+  "estimatedTokens": "Estimated tokens",
+  "imageTooLarge": "Images must be at most 2 MB each, with at most 4 per message.",
+  "fileReadError": "Could not read the file. Please try again.",
+  "generationFailed": "Response could not be completed",
+  "generationCancelled": "Response stopped",
+  "retryGeneration": "Retry response",
+  "error": {
+    "eyebrow": "Something went wrong",
+    "title": "Let’s get you back to your chats",
+    "message": "The application could not continue. Try again or reload the page.",
+    "retry": "Try again",
+    "reload": "Reload page",
+    "storageHelp": "If browser storage is blocked or full, allow storage for this site or free device space, then reload. Download a backup before removing site data. This recovery screen never clears your saved chats.",
+    "downloadBackup": "Download local backup",
+    "backupPrivacy": "The recovery file may contain saved API keys and private conversations. Keep it private.",
+    "noBackup": "No local backup was found in this browser.",
+    "backupUnavailable": "The backup could not be read or downloaded. Allow site storage in your browser settings, then try again. Your saved data has not been cleared."
+  },
+  "toolStructureLocked": "To preserve tool-call order, messages in a conversation with tools cannot be reordered, and tool-turn parts cannot be individually deleted, assigned a different role or regenerated. You can edit their text or start a new chat."
 }

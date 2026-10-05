@@ -1,11 +1,9 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
-import useStore from '@store/store';
+import { Prompt } from '@type/prompt';
 import { exportPrompts } from '@utils/prompt';
 
-const ExportPrompt = () => {
+const ExportPrompt = ({ prompts }: { prompts: Prompt[] }) => {
   const { t } = useTranslation();
-  const prompts = useStore.getState().prompts;
 
   return (
     <div className='flex flex-col gap-2'>

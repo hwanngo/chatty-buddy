@@ -1,21 +1,14 @@
+import { v4 as uuidv4 } from 'uuid';
 import useStore from '@store/store';
 import { useTranslation } from 'react-i18next';
-import {
+import type {
   ChatInterface,
   ConfigInterface,
   MessageInterface,
   TextContentInterface,
-  ToolCallInterface,
 } from '@type/chat';
 import { executeToolCall } from '@utils/tools';
-
-/**
- * How many times the model may call a tool before we stop honouring requests
- * within a single submit. Each round is a full round-trip plus a page fetch on
- * the user's clock, and a model that loops would otherwise never hand back
- * control. Three is enough for "fetch, notice a redirect, fetch again".
- */
-const MAX_TOOL_ROUNDS = 3;
+import { splitThinking } from '@utils/thinking';
 import {
   getChatCompletion,
   getChatCompletionStream,
@@ -24,710 +17,499 @@ import {
   getOllamaChatCompletion,
   getOllamaChatCompletionStream,
 } from '@api/api';
-import {
-  parseEventSource,
-  foldAnthropicContent,
-  parseAnthropicEventSource,
-  parseOllamaStream,
-} from '@api/helper';
+import { foldAnthropicContent } from '@api/helper';
 import { limitMessageTokens, updateTotalTokenUsed } from '@utils/messageUtils';
-import { _defaultChatConfig } from '@constants/chat';
 import { officialAPIEndpoint } from '@constants/auth';
-import { modelStreamSupport } from '@constants/modelLoader';
+import {
+  isModelsReady,
+  modelMaxToken,
+  modelOptions,
+  modelStreamSupport,
+} from '@constants/modelLoader';
 import {
   startAbortController,
   clearAbortController,
+  isActiveController,
   isAbortError,
 } from '@utils/abortController';
+import {
+  MAX_TOOL_CALLS,
+  readGenerationStream,
+  updateGenerationMessage,
+} from '@utils/generation';
+
+const MAX_TOOL_ROUNDS = 3;
+const emptyAssistant = (): MessageInterface => ({
+  id: uuidv4(),
+  role: 'assistant',
+  generationStatus: 'streaming',
+  content: [{ type: 'text', text: '' }],
+});
 
 const useSubmit = () => {
   const { t, i18n } = useTranslation('api');
   const error = useStore((state) => state.error);
-  const setError = useStore((state) => state.setError);
-  const apiEndpoint = useStore((state) => state.apiEndpoint);
-  const apiKey = useStore((state) => state.apiKey);
-  const apiType = useStore((state) => state.apiType);
-  const setGenerating = useStore((state) => state.setGenerating);
-  const generating = useStore((state) => state.generating);
-  const currentChatIndex = useStore((state) => state.currentChatIndex);
-  const setChats = useStore((state) => state.setChats);
-
-  /** Appends text to the message currently being streamed into. */
-  const appendToLastMessage = (text: string) => {
-    const updatedChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
-    );
-    const updatedMessages = updatedChats[currentChatIndex].messages;
-    (
-      updatedMessages[updatedMessages.length - 1]
-        .content[0] as TextContentInterface
-    ).text += text;
-    setChats(updatedChats);
-  };
-
-  const generateTitle = async (
-    message: MessageInterface[],
-    modelConfig: ConfigInterface
-  ): Promise<string> => {
-    try {
-      // ── Anthropic-compatible path ──────────────────────────────────────
-      if (apiType === 'anthropic') {
-        const titleChatConfig = {
-          ...modelConfig,
-          model: useStore.getState().titleModel ?? modelConfig.model,
-        };
-        const data = await getAnthropicChatCompletion(
-          useStore.getState().apiEndpoint,
-          message,
-          titleChatConfig,
-          useStore.getState().apiKey || undefined
-        );
-        // Not foldAnthropicContent: a title is the answer only — reasoning
-        // must never end up in the chat's name.
-        const titleText = data.content?.find((b) => b.type === 'text')?.text;
-        if (!titleText)
-          throw new Error(t('errors.failedToRetrieveData') as string);
-        return titleText;
-      }
-
-      // ── Ollama native path ────────────────────────────────────────────
-      if (apiType === 'ollama') {
-        const titleChatConfig = {
-          ...modelConfig,
-          model: useStore.getState().titleModel ?? modelConfig.model,
-          // A title is a one-liner; reasoning about it would cost more than
-          // the title is worth.
-          think: false,
-        };
-        const data = await getOllamaChatCompletion(
-          useStore.getState().apiEndpoint,
-          message,
-          titleChatConfig,
-          useStore.getState().apiKey || undefined
-        );
-        const titleText = data?.message?.content;
-        if (!titleText)
-          throw new Error(t('errors.failedToRetrieveData') as string);
-        return titleText;
-      }
-
-      // ── OpenAI-compatible path (unchanged) ────────────────────────────
-      let data;
-      if (!apiKey || apiKey.length === 0) {
-        if (apiEndpoint === officialAPIEndpoint) {
-          throw new Error(t('noApiKeyWarning') as string);
-        }
-        const titleChatConfig = {
-          ..._defaultChatConfig,
-          model: useStore.getState().titleModel ?? _defaultChatConfig.model,
-        };
-        data = await getChatCompletion(
-          useStore.getState().apiEndpoint,
-          message,
-          titleChatConfig,
-          undefined,
-          undefined,
-          useStore.getState().apiVersion
-        );
-      } else if (apiKey) {
-        const titleChatConfig = {
-          ...modelConfig,
-          model: useStore.getState().titleModel ?? modelConfig.model,
-        };
-        data = await getChatCompletion(
-          useStore.getState().apiEndpoint,
-          message,
-          titleChatConfig,
-          apiKey,
-          undefined,
-          useStore.getState().apiVersion
-        );
-      }
-      return data.choices[0].message.content;
-    } catch (error: unknown) {
-      throw new Error(
-        `${t('errors.errorGeneratingTitle')}\n${(error as Error).message}`
-      );
-    }
-  };
 
   const handleSubmit = async () => {
-    const chats = useStore.getState().chats;
-    if (generating || !chats) return;
-
-    if (
-      (!apiKey || apiKey.length === 0) &&
-      apiEndpoint === officialAPIEndpoint
-    ) {
-      setError(t('noApiKeyWarning') as string);
+    // Everything that defines the request is captured together. Changing the
+    // endpoint or switching chats mid-request cannot redirect follow-up calls.
+    const initial = useStore.getState();
+    const chat = initial.chats?.[initial.currentChatIndex];
+    if (initial.generating || !chat) return;
+    const {
+      apiEndpoint,
+      apiKey,
+      apiType,
+      apiVersion,
+      autoTitle,
+      countTotalTokens,
+    } = initial;
+    if (!apiKey && apiEndpoint === officialAPIEndpoint) {
+      initial.setError(t('noApiKeyWarning'));
       return;
     }
-
-    const updatedChats: ChatInterface[] = JSON.parse(JSON.stringify(chats));
-
-    updatedChats[currentChatIndex].messages.push({
-      role: 'assistant',
-      content: [
-        {
-          type: 'text',
-          text: '',
-        } as TextContentInterface,
-      ],
-    });
-
-    setChats(updatedChats);
-    setGenerating(true);
-
+    const config = { ...chat.config };
+    const preferredTitleModel = initial.titleModel ?? config.model;
+    const titleModelUnavailable =
+      isModelsReady &&
+      modelOptions.length > 0 &&
+      !modelOptions.includes(preferredTitleModel);
+    // A preference survives endpoint switches. Only the effective model for
+    // this request falls back when the loaded catalog establishes its absence.
+    const titleModel = titleModelUnavailable
+      ? config.model
+      : preferredTitleModel;
+    const titleLanguage = i18n.language;
+    const chatId = chat.id;
     const controller = startAbortController();
     const signal = controller.signal;
-
-    try {
-      // Anthropic always supports streaming; unknown OpenAI models default to
-      // streaming (a missing entry means "model not in our list", not "no stream").
-      const isStreamSupported =
-        apiType === 'anthropic' || apiType === 'ollama'
-          ? true
-          : modelStreamSupport[chats[currentChatIndex].config.model] ?? true;
-
-      let data;
-      let stream;
-
-      if (chats[currentChatIndex].messages.length === 0)
-        throw new Error(t('errors.noMessagesSubmitted') as string);
-
-      const messages = limitMessageTokens(
-        chats[currentChatIndex].messages,
-        chats[currentChatIndex].config.max_tokens,
-        chats[currentChatIndex].config.model
+    let timedOut = false;
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 300_000);
+    let assistant = emptyAssistant();
+    let messageId = assistant.id!;
+    let buffered = '';
+    let flushTimer: ReturnType<typeof setTimeout> | undefined;
+    let unsubscribe: (() => void) | undefined;
+    const patchMessage = (
+      update: (message: MessageInterface) => MessageInterface
+    ) => {
+      const state = useStore.getState();
+      if (
+        !state.chats?.some(
+          (item) =>
+            item.id === chatId &&
+            item.messages.some((message) => message.id === messageId)
+        )
+      )
+        return;
+      state.setChats(
+        updateGenerationMessage(state.chats, chatId, messageId, update)
       );
-      if (messages.length === 0)
-        throw new Error(t('errors.messageExceedMaxToken') as string);
-
-      if (!isStreamSupported) {
-        // ── Non-streaming branch ──────────────────────────────────────────
-        if (apiType === 'ollama') {
-          // isStreamSupported is always true for ollama, so this is a safety
-          // fallback rather than a path the UI can normally reach.
-          data = await getOllamaChatCompletion(
-            useStore.getState().apiEndpoint,
-            messages,
-            chats[currentChatIndex].config,
-            apiKey || undefined,
-            signal
-          );
-          const text = data?.message?.content;
-          if (!text) throw new Error(t('errors.failedToRetrieveData') as string);
-          appendToLastMessage(
-            data.message.thinking
-              ? `<think>${data.message.thinking}</think>${text}`
-              : text
-          );
-        } else if (apiType === 'anthropic') {
-          // isStreamSupported is always true for Anthropic, so this is a safety fallback
-          data = await getAnthropicChatCompletion(
-            useStore.getState().apiEndpoint,
-            messages,
-            chats[currentChatIndex].config,
-            apiKey || undefined,
-            signal
-          );
-          // A reasoning model puts its thinking block first, so indexing
-          // content[0] for text would both miss the answer and throw.
-          const anthropicText = foldAnthropicContent(data?.content);
-          if (!anthropicText) {
-            throw new Error(t('errors.failedToRetrieveData') as string);
+    };
+    const flush = () => {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = undefined;
+      if (!buffered) return;
+      const text = buffered;
+      buffered = '';
+      patchMessage((message) => ({
+        ...message,
+        content: [
+          {
+            type: 'text',
+            text:
+              String((message.content[0] as TextContentInterface)?.text ?? '') +
+              text,
+          },
+          ...message.content.slice(1),
+        ],
+      }));
+    };
+    const append = (text: string) => {
+      buffered += text;
+      if (!flushTimer)
+        flushTimer = setTimeout(() => {
+          try {
+            flush();
+          } catch (cause) {
+            controller.abort(cause);
+            useStore.getState().setError((cause as Error).message);
           }
-          const updatedChats: ChatInterface[] = JSON.parse(
-            JSON.stringify(useStore.getState().chats)
-          );
-          const updatedMessages = updatedChats[currentChatIndex].messages;
-          (
-            updatedMessages[updatedMessages.length - 1]
-              .content[0] as TextContentInterface
-          ).text += anthropicText;
-          setChats(updatedChats);
-        } else {
-          // OpenAI non-streaming (unchanged)
-          if (!apiKey || apiKey.length === 0) {
-            if (apiEndpoint === officialAPIEndpoint) {
-              throw new Error(t('noApiKeyWarning') as string);
-            }
-            data = await getChatCompletion(
-              useStore.getState().apiEndpoint,
-              messages,
-              chats[currentChatIndex].config,
-              undefined,
-              undefined,
-              useStore.getState().apiVersion,
-              signal
-            );
-          } else if (apiKey) {
-            data = await getChatCompletion(
-              useStore.getState().apiEndpoint,
-              messages,
-              chats[currentChatIndex].config,
-              apiKey,
-              undefined,
-              useStore.getState().apiVersion,
-              signal
-            );
-          }
-
-          if (
-            !data ||
-            !data.choices ||
-            !data.choices[0] ||
-            !data.choices[0].message ||
-            !data.choices[0].message.content
-          ) {
-            throw new Error(t('errors.failedToRetrieveData') as string);
-          }
-
-          const updatedChats: ChatInterface[] = JSON.parse(
-            JSON.stringify(useStore.getState().chats)
-          );
-          const updatedMessages = updatedChats[currentChatIndex].messages;
-          (
-            updatedMessages[updatedMessages.length - 1]
-              .content[0] as TextContentInterface
-          ).text += data.choices[0].message.content;
-          setChats(updatedChats);
+        }, 50);
+    };
+    const inputBudget = Math.min(
+      config.max_tokens,
+      Math.max(
+        1,
+        (modelMaxToken[config.model] ??
+          config.max_tokens + (config.output_tokens ?? 4096)) -
+          (config.output_tokens ?? 4096)
+      )
+    );
+    const requestOnce = async (
+      messages: MessageInterface[],
+      requestConfig: ConfigInterface
+    ) => {
+      signal.throwIfAborted();
+      if (apiType === 'anthropic') {
+        const data = await getAnthropicChatCompletion(
+          apiEndpoint,
+          messages,
+          requestConfig,
+          apiKey || undefined,
+          signal
+        );
+        return { text: foldAnthropicContent(data.content), toolCalls: [] };
+      }
+      if (apiType === 'ollama') {
+        const data = await getOllamaChatCompletion(
+          apiEndpoint,
+          messages,
+          requestConfig,
+          apiKey || undefined,
+          signal
+        );
+        return {
+          text: data.message?.thinking
+            ? `<think>${data.message.thinking}</think>${data.message.content ?? ''}`
+            : (data.message?.content ?? ''),
+          toolCalls: (data.message?.tool_calls ?? []).map(
+            (call: {
+              id?: string;
+              function: { name: string; arguments: unknown };
+            }) => ({
+              id: call.id ?? uuidv4(),
+              type: 'function' as const,
+              function: {
+                name: call.function.name,
+                arguments:
+                  typeof call.function.arguments === 'string'
+                    ? call.function.arguments
+                    : JSON.stringify(call.function.arguments ?? {}),
+              },
+            })
+          ),
+        };
+      }
+      const data = await getChatCompletion(
+        apiEndpoint,
+        messages,
+        requestConfig,
+        apiKey || undefined,
+        undefined,
+        apiVersion,
+        signal
+      );
+      return {
+        text: data.choices?.[0]?.message?.content ?? '',
+        toolCalls: data.choices?.[0]?.message?.tool_calls ?? [],
+      };
+    };
+    try {
+      const messages = limitMessageTokens(
+        chat.messages,
+        inputBudget,
+        config.model,
+        true
+      );
+      initial.setError('');
+      initial.setGenerating(true);
+      initial.setChats(
+        initial.chats!.map((item): ChatInterface =>
+          item.id === chatId
+            ? { ...item, messages: [...item.messages, assistant] }
+            : item
+        )
+      );
+      unsubscribe = useStore.subscribe((state) => {
+        if (
+          !state.chats?.some(
+            (item) =>
+              item.id === chatId &&
+              item.messages.some((message) => message.id === messageId)
+          )
+        ) {
+          controller.abort();
         }
-      } else {
-        // ── Streaming branch ──────────────────────────────────────────────
-        // What we send this round. When the model asks for a tool, its request
-        // and the tool's result are appended here so the next round sees them.
-        let roundMessages: MessageInterface[] = messages;
-
-        for (let round = 0; ; round++) {
+      });
+      let roundMessages = messages;
+      const streaming =
+        apiType !== 'openai' || modelStreamSupport[config.model] !== false;
+      for (let round = 0; ; round++) {
+        signal.throwIfAborted();
+        const sent = limitMessageTokens(
+          roundMessages,
+          inputBudget,
+          config.model,
+          true
+        );
+        let result;
+        if (streaming) {
+          let stream: ReadableStream<Uint8Array> | null;
           if (apiType === 'anthropic') {
             stream = await getAnthropicChatCompletionStream(
-              useStore.getState().apiEndpoint,
-              roundMessages,
-              chats[currentChatIndex].config,
+              apiEndpoint,
+              sent,
+              config,
               apiKey || undefined,
               signal
             );
           } else if (apiType === 'ollama') {
             stream = await getOllamaChatCompletionStream(
-              useStore.getState().apiEndpoint,
-              roundMessages,
-              chats[currentChatIndex].config,
+              apiEndpoint,
+              sent,
+              config,
               apiKey || undefined,
               signal
             );
           } else {
-            // The official endpoint is the only one that *requires* a key;
-            // local and self-hosted endpoints are commonly keyless.
-            if (
-              (!apiKey || apiKey.length === 0) &&
-              apiEndpoint === officialAPIEndpoint
-            ) {
-              throw new Error(t('noApiKeyWarning') as string);
-            }
             stream = await getChatCompletionStream(
-              useStore.getState().apiEndpoint,
-              roundMessages,
-              chats[currentChatIndex].config,
+              apiEndpoint,
+              sent,
+              config,
               apiKey || undefined,
               undefined,
-              useStore.getState().apiVersion,
+              apiVersion,
               signal
             );
           }
-
-          // Tool calls stream in fragments — id and name in one chunk, the
-          // JSON arguments dribbled across many — so they're accumulated by
-          // index and only executed once the stream closes.
-          const toolCallAcc: ToolCallInterface[] = [];
-
-          if (stream) {
-          if (stream.locked)
-            throw new Error(t('errors.streamLocked') as string);
-          const reader = stream.getReader();
-          let reading = true;
-          let partial = '';
-          // Whether we're inside a synthetic `<think>` block. Providers that
-          // stream reasoning in its own delta field get it folded into the
-          // message content as `<think>…</think>`, which is exactly what local
-          // runtimes emit natively — so reasoning has one representation
-          // regardless of provider, and `splitThinking` renders both.
-          let reasoningOpen = false;
-
-          while (reading && useStore.getState().generating) {
-            const { done, value } = await reader.read();
-
-            if (apiType === 'ollama') {
-              // ── Ollama native stream parsing ────────────────────────────
-              // Newline-delimited JSON: hold back a trailing partial line, and
-              // hand only whole lines to the parser.
-              const rawData = partial + new TextDecoder().decode(value);
-              let toProcess: string;
-              if (done) {
-                toProcess = rawData;
-                partial = '';
-              } else {
-                const lastBreak = rawData.lastIndexOf('\n');
-                if (lastBreak === -1) {
-                  partial = rawData;
-                  toProcess = '';
-                } else {
-                  toProcess = rawData.slice(0, lastBreak + 1);
-                  partial = rawData.slice(lastBreak + 1);
-                }
-              }
-
-              const { chunks, done: ollamaDone } = toProcess
-                ? parseOllamaStream(toProcess)
-                : { chunks: [], done: false };
-              if (done || ollamaDone) reading = false;
-
-              let resultString = '';
-              for (const chunk of chunks) {
-                const message = chunk.message;
-                if (!message) continue;
-
-                // Reasoning has its own field here. Fold it into the content
-                // as `<think>` so it takes the same path as every other
-                // provider and `splitThinking` renders it unchanged.
-                if (message.thinking) {
-                  if (!reasoningOpen) {
-                    resultString += '<think>';
-                    reasoningOpen = true;
-                  }
-                  resultString += message.thinking;
-                }
-                if (message.content) {
-                  if (reasoningOpen) {
-                    resultString += '</think>';
-                    reasoningOpen = false;
-                  }
-                  resultString += message.content;
-                }
-
-                // Tool calls arrive complete rather than as fragments. The
-                // arguments come as an object, so they're serialised here to
-                // match the internal shape and keep the executor
-                // protocol-agnostic.
-                for (const call of message.tool_calls ?? []) {
-                  toolCallAcc.push({
-                    id:
-                      call.id ??
-                      `call_${toolCallAcc.length}_${call.function.name}`,
-                    type: 'function',
-                    function: {
-                      name: call.function.name,
-                      arguments:
-                        typeof call.function.arguments === 'string'
-                          ? call.function.arguments
-                          : JSON.stringify(call.function.arguments ?? {}),
-                    },
-                  });
-                }
-              }
-
-              if (resultString) appendToLastMessage(resultString);
-            } else if (apiType === 'anthropic') {
-              // ── Anthropic stream parsing ────────────────────────────────
-              const rawData = partial + new TextDecoder().decode(value);
-
-              // On stream EOF (done=true), flush all remaining bytes.
-              // Otherwise save tail after last \n\n to partial to handle split events.
-              let toProcess: string;
-              if (done) {
-                toProcess = rawData;
-                partial = '';
-              } else {
-                const lastBoundary = rawData.lastIndexOf('\n\n');
-                if (lastBoundary === -1) {
-                  partial = rawData;
-                  toProcess = '';
-                } else {
-                  toProcess = rawData.slice(0, lastBoundary + 2);
-                  partial = rawData.slice(lastBoundary + 2);
-                }
-              }
-
-              const { chunks, done: anthropicDone } =
-                parseAnthropicEventSource(toProcess);
-
-              if (done || anthropicDone) {
-                reading = false;
-              }
-
-              // Reasoning arrives as its own delta type here, so it gets the
-              // same `<think>` folding as the ollama and OpenAI paths.
-              let resultString = '';
-              for (const curr of chunks) {
-                if (curr.delta.type === 'thinking_delta') {
-                  if (!reasoningOpen) {
-                    resultString += '<think>';
-                    reasoningOpen = true;
-                  }
-                  resultString += curr.delta.thinking;
-                } else {
-                  if (reasoningOpen) {
-                    resultString += '</think>';
-                    reasoningOpen = false;
-                  }
-                  resultString += curr.delta.text;
-                }
-              }
-
-              if (resultString) {
-                const updatedChats: ChatInterface[] = JSON.parse(
-                  JSON.stringify(useStore.getState().chats)
-                );
-                const updatedMessages = updatedChats[currentChatIndex].messages;
-                (
-                  updatedMessages[updatedMessages.length - 1]
-                    .content[0] as TextContentInterface
-                ).text += resultString;
-                setChats(updatedChats);
-              }
-            } else {
-              // ── OpenAI stream parsing ──────────────────────────────────
-              // Buffer at the last \n\n boundary so a JSON event split across
-              // two network reads isn't handed to JSON.parse half-formed.
-              const rawData = partial + new TextDecoder().decode(value);
-
-              let toProcess: string;
-              if (done) {
-                toProcess = rawData;
-                partial = '';
-              } else {
-                const lastBoundary = rawData.lastIndexOf('\n\n');
-                if (lastBoundary === -1) {
-                  partial = rawData;
-                  toProcess = '';
-                } else {
-                  toProcess = rawData.slice(0, lastBoundary + 2);
-                  partial = rawData.slice(lastBoundary + 2);
-                }
-              }
-
-              const result = toProcess ? parseEventSource(toProcess) : [];
-
-              let resultString = '';
-              if (result !== '[DONE]') {
-                for (const curr of result) {
-                  if (typeof curr === 'string') {
-                    if (curr === '[DONE]') reading = false;
-                    continue;
-                  }
-                  if (!curr.choices || !curr.choices[0] || !curr.choices[0].delta)
-                    continue;
-                  const delta = curr.choices[0].delta;
-
-                  // Reasoning arrives before the answer. Open a `<think>`
-                  // block on the first reasoning delta and close it as soon as
-                  // real content starts, so the two never run together.
-                  const reasoning = delta.reasoning ?? delta.reasoning_content;
-                  if (reasoning) {
-                    if (!reasoningOpen) {
-                      resultString += '<think>';
-                      reasoningOpen = true;
-                    }
-                    resultString += reasoning;
-                  }
-
-                  const content = delta.content ?? null;
-                  if (content) {
-                    if (reasoningOpen) {
-                      resultString += '</think>';
-                      reasoningOpen = false;
-                    }
-                    resultString += content;
-                  }
-
-                  // Merge tool-call fragments by index. `id` and `name` show
-                  // up once, `arguments` accumulates across many chunks, so
-                  // only the argument string is concatenated.
-                  for (const fragment of delta.tool_calls ?? []) {
-                    const at = fragment.index ?? 0;
-                    const slot = (toolCallAcc[at] ??= {
-                      id: '',
-                      type: 'function',
-                      function: { name: '', arguments: '' },
-                    });
-                    if (fragment.id) slot.id = fragment.id;
-                    if (fragment.function?.name)
-                      slot.function.name = fragment.function.name;
-                    if (fragment.function?.arguments)
-                      slot.function.arguments += fragment.function.arguments;
-                  }
-                }
-              }
-
-              if (done) reading = false;
-
-              if (resultString) {
-                const updatedChats: ChatInterface[] = JSON.parse(
-                  JSON.stringify(useStore.getState().chats)
-                );
-                const updatedMessages = updatedChats[currentChatIndex].messages;
-                (
-                  updatedMessages[updatedMessages.length - 1]
-                    .content[0] as TextContentInterface
-                ).text += resultString;
-                setChats(updatedChats);
-              }
-            }
-          }
-
-          // The stream can end mid-thought: the user stopped it, the model
-          // reasoned until it hit a limit, or it simply never produced an
-          // answer. Close the block so the stored message stays well-formed
-          // instead of carrying a dangling `<think>`.
-          if (reasoningOpen) {
-            const updatedChats: ChatInterface[] = JSON.parse(
-              JSON.stringify(useStore.getState().chats)
-            );
-            const updatedMessages = updatedChats[currentChatIndex].messages;
-            (
-              updatedMessages[updatedMessages.length - 1]
-                .content[0] as TextContentInterface
-            ).text += '</think>';
-            setChats(updatedChats);
-            reasoningOpen = false;
-          }
-
-          if (useStore.getState().generating) {
-            reader.cancel(t('errors.cancelledByUser') as string);
-          } else {
-            reader.cancel(t('errors.generationCompleted') as string);
-          }
-          reader.releaseLock();
-          stream.cancel();
+          result = await readGenerationStream(stream, apiType, signal, append);
+        } else {
+          result = await requestOnce(sent, config);
+          if (
+            typeof result.text !== 'string' ||
+            (!result.text && !result.toolCalls.length)
+          )
+            throw new Error(t('errors.failedToRetrieveData'));
+          append(result.text);
         }
-
-          // No tool requested, or the user stopped the run — this round's
-          // answer is the final one.
-          const requested = toolCallAcc.filter((c) => c && c.function.name);
-          if (requested.length === 0 || !useStore.getState().generating) break;
-
-          // A model that keeps calling tools would otherwise loop forever on
-          // the user's clock. Stop, and say so in the transcript rather than
-          // silently returning a half-finished answer.
-          if (round >= MAX_TOOL_ROUNDS - 1) {
-            appendToLastMessage(
-              `\n\n_${t('errors.toolRoundLimit', {
-                count: MAX_TOOL_ROUNDS,
-              })}_`
-            );
-            break;
-          }
-
-          // Record the request on the assistant message that made it, then run
-          // each call and append its result. Both go into the transcript, so a
-          // follow-up question can still see what the page said.
-          const assistantWithCalls: MessageInterface = {
+        if (!result.text && !result.toolCalls.length)
+          throw new Error(t('errors.failedToRetrieveData'));
+        flush();
+        signal.throwIfAborted();
+        if (countTotalTokens)
+          updateTotalTokenUsed(config.model, sent, {
             role: 'assistant',
-            content: [{ type: 'text', text: '' } as TextContentInterface],
-            tool_calls: requested,
-          };
-
-          const toolMessages: MessageInterface[] = [];
-          for (const call of requested) {
-            const result = await executeToolCall(call, signal);
-            toolMessages.push({
-              role: 'tool',
-              tool_call_id: call.id,
-              tool_name: result.label,
-              content: [
-                { type: 'text', text: result.content } as TextContentInterface,
-              ],
-            });
-          }
-
-          roundMessages = [...roundMessages, assistantWithCalls, ...toolMessages];
-
-          // Mirror into the visible chat: annotate the placeholder we've been
-          // streaming into, add the tool results, then open a fresh assistant
-          // message for the next round to write to.
-          const withTools: ChatInterface[] = JSON.parse(
-            JSON.stringify(useStore.getState().chats)
+            content: [{ type: 'text', text: result.text }],
+            ...(result.toolCalls.length
+              ? { tool_calls: result.toolCalls }
+              : {}),
+          });
+        const requested = result.toolCalls;
+        if (!requested.length) {
+          patchMessage((message) => ({
+            ...message,
+            generationStatus: 'complete',
+          }));
+          break;
+        }
+        if (!config.fetchUrl || apiType === 'anthropic')
+          throw new Error(
+            'The model requested a tool that is disabled for this request.'
           );
-          const visible = withTools[currentChatIndex].messages;
-          visible[visible.length - 1].tool_calls = requested;
-          visible.push(...toolMessages, {
-            role: 'assistant',
-            content: [{ type: 'text', text: '' } as TextContentInterface],
-          });
-          setChats(withTools);
+        if (
+          requested.length > MAX_TOOL_CALLS ||
+          new Set(requested.map((call: { id: string }) => call.id)).size !==
+            requested.length ||
+          requested.some(
+            (call: {
+              id?: string;
+              function?: { name: string; arguments: string };
+            }) =>
+              !call.id ||
+              call.function?.name !== 'fetch_url' ||
+              typeof call.function.arguments !== 'string' ||
+              call.function.arguments.length > 32768
+          )
+        ) {
+          throw new Error(
+            'The model requested an unsupported or invalid tool call.'
+          );
         }
-      }
-
-      // ── Token accounting (unchanged) ────────────────────────────────────
-      const currChats = useStore.getState().chats;
-      const countTotalTokens = useStore.getState().countTotalTokens;
-
-      if (currChats && countTotalTokens) {
-        const model = currChats[currentChatIndex].config.model;
-        const messages = currChats[currentChatIndex].messages;
-        updateTotalTokenUsed(
-          model,
-          messages.slice(0, -1),
-          messages[messages.length - 1]
-        );
-      }
-
-      // ── Auto-title generation (unchanged) ───────────────────────────────
-      if (
-        useStore.getState().autoTitle &&
-        currChats &&
-        !currChats[currentChatIndex]?.titleSet
-      ) {
-        const messages_length = currChats[currentChatIndex].messages.length;
-        const assistant_message =
-          currChats[currentChatIndex].messages[messages_length - 1].content;
-        const user_message =
-          currChats[currentChatIndex].messages[messages_length - 2].content;
-
-        const message: MessageInterface = {
-          role: 'user',
-          content: [
-            ...user_message,
-            ...assistant_message,
-            {
-              type: 'text',
-              text: `Generate a title in less than 6 words for the conversation so far (language: ${i18n.language})`,
-            } as TextContentInterface,
-          ],
+        if (round >= MAX_TOOL_ROUNDS)
+          throw new Error(
+            t('errors.toolRoundLimit', { count: MAX_TOOL_ROUNDS })
+          );
+        const toolMessages: MessageInterface[] = [];
+        for (const call of requested) {
+          signal.throwIfAborted();
+          const result = await executeToolCall(
+            call,
+            signal,
+            config.fetchUrl === true
+          );
+          toolMessages.push({
+            id: uuidv4(),
+            role: 'tool',
+            tool_call_id: call.id,
+            tool_name: result.label,
+            content: [{ type: 'text', text: result.content }],
+          });
+        }
+        signal.throwIfAborted();
+        const assistantWithCalls: MessageInterface = {
+          ...assistant,
+          content: [{ type: 'text', text: result.text }],
+          tool_calls: requested,
+          generationStatus: 'complete',
         };
-
-        const updatedChats: ChatInterface[] = JSON.parse(
-          JSON.stringify(useStore.getState().chats)
+        roundMessages = [...sent, assistantWithCalls, ...toolMessages];
+        const previousId = messageId;
+        assistant = emptyAssistant();
+        messageId = assistant.id!;
+        const state = useStore.getState();
+        state.setChats(
+          (state.chats ?? []).map((item) => {
+            if (item.id !== chatId) return item;
+            const index = item.messages.findIndex(
+              (message) => message.id === previousId
+            );
+            if (index < 0) return item;
+            const messages = item.messages.slice();
+            messages.splice(
+              index,
+              1,
+              assistantWithCalls,
+              ...toolMessages,
+              assistant
+            );
+            return { ...item, messages };
+          })
         );
-        let title = (
-          await generateTitle([message], updatedChats[currentChatIndex].config)
-        ).trim();
-        if (title.startsWith('"') && title.endsWith('"')) {
-          title = title.slice(1, -1);
-        }
-        updatedChats[currentChatIndex].title = title;
-        updatedChats[currentChatIndex].titleSet = true;
-        setChats(updatedChats);
-
-        if (countTotalTokens) {
-          const model = _defaultChatConfig.model;
-          updateTotalTokenUsed(model, [message], {
-            role: 'assistant',
-            content: [{ type: 'text', text: title } as TextContentInterface],
-          });
+      }
+      signal.throwIfAborted();
+      const currentChat = useStore
+        .getState()
+        .chats?.find((item) => item.id === chatId);
+      if (autoTitle && currentChat && !currentChat.titleSet) {
+        const source = [...currentChat.messages]
+          .reverse()
+          .find((message) => message.role === 'user');
+        const answer = currentChat.messages.find(
+          (message) => message.id === messageId
+        );
+        if (source && answer) {
+          try {
+            const titleMessage: MessageInterface = {
+              role: 'user',
+              content: [
+                ...source.content.filter((part) => part.type === 'text'),
+                ...answer.content.filter((part) => part.type === 'text'),
+                {
+                  type: 'text',
+                  text: `Generate a title in less than 6 words (language: ${titleLanguage}). Return only the title.`,
+                },
+              ],
+            };
+            if (titleModelUnavailable) {
+              useStore.getState().addToast(
+                'warning',
+                t('errors.titleModelUnavailable', {
+                  defaultValue:
+                    'Selected title model unavailable; using conversation model ({{model}}).',
+                  model: titleModel,
+                })
+              );
+            }
+            const titleConfig = {
+              ...config,
+              model: titleModel,
+              think: false,
+              fetchUrl: false,
+              webSearch: false,
+              output_tokens: 128,
+            };
+            // Use a bounded excerpt for titles; title generation must never
+            // turn a successful long answer into a failed chat request.
+            titleMessage.content = [
+              {
+                type: 'text',
+                text: titleMessage.content
+                  .map((part) => String(part.text ?? ''))
+                  .join('\n')
+                  .slice(-3000),
+              },
+            ];
+            const titleInput = limitMessageTokens(
+              [titleMessage],
+              Math.min(4096, inputBudget),
+              titleModel,
+              true
+            );
+            const { text: rawTitle } = await requestOnce(
+              titleInput,
+              titleConfig
+            );
+            signal.throwIfAborted();
+            // Some local models reason despite the title configuration. Never
+            // let that reasoning become a conversation's name.
+            const title = splitThinking(String(rawTitle ?? ''))
+              .answer.trim()
+              .replace(/^"|"$/g, '')
+              .slice(0, 160);
+            if (title) {
+              const state = useStore.getState();
+              state.setChats(
+                (state.chats ?? []).map((item) =>
+                  item.id === chatId && !item.titleSet
+                    ? { ...item, title, titleSet: true }
+                    : item
+                )
+              );
+              if (countTotalTokens)
+                updateTotalTokenUsed(titleModel, titleInput, {
+                  role: 'assistant',
+                  content: [{ type: 'text', text: String(rawTitle) }],
+                });
+            }
+          } catch (cause) {
+            if (!signal.aborted)
+              useStore
+                .getState()
+                .addToast(
+                  'warning',
+                  `The answer was saved, but its title could not be generated: ${(cause as Error).message}`
+                );
+          }
         }
       }
-    } catch (e: unknown) {
-      // User pressed Stop — the request was aborted on purpose, not an error.
-      if (!isAbortError(e)) {
-        setError((e as Error).message);
+    } catch (cause) {
+      const cancelled =
+        signal.aborted && !timedOut && isAbortError(signal.reason);
+      let message = (cause as Error).message;
+      if (timedOut)
+        message =
+          'The generation timed out after five minutes. Retry or shorten the request.';
+      try {
+        flush();
+        patchMessage((previous) => ({
+          ...previous,
+          generationStatus: cancelled ? 'cancelled' : 'failed',
+          generationError: cancelled ? undefined : message,
+        }));
+      } catch (storageError) {
+        // A full storage device can also prevent persisting the failure flag.
+        // Runtime-only error state still gives the user a recovery message.
+        message = (storageError as Error).message;
       }
+      if (!cancelled) useStore.getState().setError(message);
     } finally {
-      clearAbortController();
-      setGenerating(false);
+      clearTimeout(timeout);
+      unsubscribe?.();
+      try {
+        flush();
+      } catch (cause) {
+        useStore.getState().setError((cause as Error).message);
+      }
+      if (isActiveController(controller)) {
+        clearAbortController(controller);
+        useStore.getState().setGenerating(false);
+      }
     }
   };
-
   return { handleSubmit, error };
 };
 

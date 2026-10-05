@@ -5,6 +5,7 @@
 let active: AbortController | null = null;
 
 export const startAbortController = (): AbortController => {
+  active?.abort();
   active = new AbortController();
   return active;
 };
@@ -14,8 +15,11 @@ export const abortActiveController = (): void => {
   active = null;
 };
 
-export const clearAbortController = (): void => {
-  active = null;
+export const isActiveController = (controller: AbortController): boolean =>
+  active === controller;
+
+export const clearAbortController = (controller?: AbortController): void => {
+  if (!controller || active === controller) active = null;
 };
 
 export const isAbortError = (e: unknown): boolean =>

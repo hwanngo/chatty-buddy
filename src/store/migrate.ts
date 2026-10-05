@@ -1,4 +1,8 @@
 import type { createPartializedState } from './store';
+import { v4 as uuidv4 } from 'uuid';
+import { defaultModel } from '@constants/chat';
+
+export const STORE_VERSION = 4;
 
 // The persisted shape is whatever partialize writes, not the full store.
 type PersistedState = ReturnType<typeof createPartializedState>;
@@ -14,8 +18,8 @@ type PersistedState = ReturnType<typeof createPartializedState>;
 // provided" — i.e. silent data loss for returning users.
 //
 // Add real transforms here when a future version renames/retypes/removes a
-// field. Adding a new field with a default does NOT need a migration —
-// persist deep-merges stored state with the initial state automatically.
+// field. Persist only shallow-merges state; nested defaults need explicit
+// migrations when their persisted schema changes.
 //
 // `import type` above keeps this a type-only import, so there is no runtime
 // circular dependency with store.ts.
@@ -44,6 +48,32 @@ export const migrate = (
   // The toggle stays in Settings for anyone who genuinely wants math off.
   if (state && version < 3) {
     state.inlineLatex = true;
+  }
+
+  if (state && version < 4) {
+    state.titleModel =
+      typeof state.titleModel === 'string' ? state.titleModel : defaultModel;
+    const chats = Array.isArray(state.chats) ? state.chats : [];
+    const chatIds = new Set<string>();
+    for (const chat of chats) {
+      if (!chat || typeof chat !== 'object') continue;
+      if (typeof chat.id !== 'string' || !chat.id || chatIds.has(chat.id))
+        chat.id = uuidv4();
+      chatIds.add(chat.id);
+      const messageIds = new Set<string>();
+      for (const message of Array.isArray(chat.messages) ? chat.messages : []) {
+        if (!message || typeof message !== 'object') continue;
+        if (
+          typeof message.id !== 'string' ||
+          !message.id ||
+          messageIds.has(message.id)
+        )
+          message.id = uuidv4();
+        messageIds.add(message.id);
+        if (message.generationStatus === 'streaming')
+          message.generationStatus = 'cancelled';
+      }
+    }
   }
 
   return state as PersistedState;

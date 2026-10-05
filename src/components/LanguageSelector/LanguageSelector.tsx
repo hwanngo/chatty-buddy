@@ -1,4 +1,3 @@
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import Select from '@components/Select';
 import { languageCodeToName, selectableLanguages } from '@constants/language';

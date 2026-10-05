@@ -7,27 +7,35 @@ import type {
   OllamaStreamChunk,
 } from '@type/api';
 
-export const parseEventSource = (
+/** Parse complete SSE records, ignoring comments and non-data fields. */
+export const parseSseRecords = (
   data: string
-): '[DONE]' | EventSourceData[] => {
-  const result = data
+): { event: string; data: string }[] =>
+  data
+    .replace(/\r\n|\r/g, '\n')
     .split('\n\n')
-    .filter(Boolean)
-    .map((chunk) => {
-      const jsonString = chunk
-        .split('\n')
-        .map((line) => line.replace(/^data: /, ''))
-        .join('');
-      if (jsonString === '[DONE]') return jsonString;
-      try {
-        const json = JSON.parse(jsonString);
-        return json;
-      } catch {
-        return jsonString;
+    .flatMap((record) => {
+      let event = '';
+      const values: string[] = [];
+      for (const line of record.split('\n')) {
+        if (line.startsWith(':')) continue;
+        const colon = line.indexOf(':');
+        const field = colon < 0 ? line : line.slice(0, colon);
+        const value = colon < 0 ? '' : line.slice(colon + 1).replace(/^ /, '');
+        if (field === 'event') event = value;
+        if (field === 'data') values.push(value);
       }
+      return values.length ? [{ event, data: values.join('\n') }] : [];
     });
-  return result;
-};
+
+export const parseEventSource = (data: string): EventSourceData[] =>
+  parseSseRecords(data).map((record) => {
+    if (record.data === '[DONE]') return '[DONE]';
+    const parsed = JSON.parse(record.data);
+    if (parsed.error)
+      throw new Error(parsed.error.message ?? String(parsed.error));
+    return parsed;
+  });
 
 export const createMultipartRelatedBody = (
   metadata: object,
@@ -78,46 +86,29 @@ export const foldAnthropicContent = (
  *            buffer, in arrival order; the caller folds thinking into `<think>`
  *   done   — true when a `message_stop` event is present
  *
- * Partial event data (buffer cut mid-event) is silently skipped; the caller
- * must prepend its saved `partial` string from the previous iteration.
+ * The caller buffers incomplete records. Malformed complete events and
+ * provider errors throw instead of silently turning a failed stream into success.
  */
 export const parseAnthropicEventSource = (
   data: string
 ): { chunks: AnthropicStreamContentBlockDelta[]; done: boolean } => {
-  const events = data.split('\n\n').filter(Boolean);
   const chunks: AnthropicStreamContentBlockDelta[] = [];
   let done = false;
-
-  for (const event of events) {
-    const lines = event.split('\n');
-    let eventType = '';
-    let dataLine = '';
-
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        eventType = line.slice(7).trim();
-      } else if (line.startsWith('data: ')) {
-        dataLine = line.slice(6).trim();
-      }
+  for (const record of parseSseRecords(data)) {
+    const parsed = JSON.parse(record.data);
+    const event = record.event || parsed.type;
+    if (event === 'error' || parsed.error) {
+      throw new Error(
+        parsed.error?.message ?? 'The provider reported a streaming error.'
+      );
     }
-
-    if (eventType === 'message_stop') {
-      done = true;
-    } else if (eventType === 'content_block_delta' && dataLine) {
-      try {
-        const parsed = JSON.parse(dataLine) as AnthropicStreamContentBlockDelta;
-        // `signature_delta` and `input_json_delta` are deliberately not kept:
-        // one is a cryptographic signature over the reasoning, the other is a
-        // tool argument fragment, and neither is content to display.
-        if (
-          parsed?.delta?.type === 'text_delta' ||
-          parsed?.delta?.type === 'thinking_delta'
-        ) {
-          chunks.push(parsed);
-        }
-      } catch {
-        // ignore malformed JSON — stream continues
-      }
+    if (event === 'message_stop') done = true;
+    if (
+      event === 'content_block_delta' &&
+      (parsed.delta?.type === 'text_delta' ||
+        parsed.delta?.type === 'thinking_delta')
+    ) {
+      chunks.push(parsed);
     }
   }
 
@@ -151,9 +142,9 @@ export const parseOllamaStream = (
       chunks.push(parsed);
       if (parsed.done) done = true;
     } catch (e) {
-      // A genuine server error must surface; malformed JSON is a torn line
-      // and is simply skipped, matching the SSE parsers above.
-      if (e instanceof Error && !(e instanceof SyntaxError)) throw e;
+      // The caller hands over complete lines, so malformed JSON is a
+      // protocol error as well as an explicit provider error.
+      throw e;
     }
   }
 

@@ -1,11 +1,15 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
-import useStore from '@store/store';
+import { Prompt } from '@type/prompt';
 
 import { importPromptCSV } from '@utils/prompt';
 
-const ImportPrompt = () => {
+const ImportPrompt = ({
+  onImport,
+}: {
+  onImport: (prompts: Prompt[]) => void;
+}) => {
   const { t } = useTranslation();
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -26,9 +30,6 @@ const ImportPrompt = () => {
         try {
           const results = importPromptCSV(csvString);
 
-          const prompts = useStore.getState().prompts;
-          const setPrompts = useStore.getState().setPrompts;
-
           const newPrompts = results.map((data) => {
             const columns = Object.values(data);
             return {
@@ -38,7 +39,7 @@ const ImportPrompt = () => {
             };
           });
 
-          setPrompts(prompts.concat(newPrompts));
+          onImport(newPrompts);
 
           setAlert({ message: 'Succesfully imported!', success: true });
         } catch (error: unknown) {
@@ -46,6 +47,8 @@ const ImportPrompt = () => {
         }
       };
 
+      reader.onerror = () =>
+        setAlert({ message: t('fileReadError'), success: false });
       reader.readAsText(file);
     }
   };
@@ -58,6 +61,8 @@ const ImportPrompt = () => {
       <input
         className='w-full text-sm file:px-3 file:py-1.5 file:mr-3 text-[var(--fg)] file:text-[var(--fg-2)] rounded-lg cursor-pointer focus:outline-none bg-[var(--bg-card)] file:bg-[var(--bg-sand)] file:border-0 border border-[var(--border-mid)] file:cursor-pointer file:rounded-md file:text-xs file:font-medium file:transition-colors hover:file:bg-[var(--ring)] py-1.5'
         type='file'
+        accept='.csv,text/csv'
+        aria-label={t('import')}
         ref={inputRef}
       />
       <div>

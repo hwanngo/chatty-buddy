@@ -6,7 +6,6 @@ import { Theme } from './theme';
 
 export type Content = 'text' | 'image_url';
 export type ImageDetail = 'low' | 'high' | 'auto';
-const imageDetails: ImageDetail[] = ['low', 'high', 'auto'];
 // `tool` carries the result of a client-executed tool call back to the model.
 // It is deliberately absent from `roles` below: that array drives the role
 // picker, and a tool result is produced by the app, never authored by hand.
@@ -70,6 +69,10 @@ export interface ToolCallInterface {
 }
 
 export interface MessageInterface {
+  /** Stable client identity; omitted from provider payloads. */
+  id?: string;
+  generationStatus?: 'streaming' | 'complete' | 'failed' | 'cancelled';
+  generationError?: string;
   role: Role;
   content: ContentInterface[];
   /** Set on an `assistant` message that requested one or more tool calls. */
@@ -101,6 +104,8 @@ export type ReasoningEffort = 'none' | 'low' | 'medium' | 'high';
 export interface ConfigInterface {
   model: ModelOptions;
   max_tokens: number;
+  /** Output cap, separate from the input history budget. */
+  output_tokens?: number;
   temperature: number;
   presence_penalty: number;
   top_p: number;
@@ -109,8 +114,8 @@ export interface ConfigInterface {
   reasoningEffort?: ReasoningEffort | null;
   /**
    * Let the model pull a web page into the conversation via the `fetch_url`
-   * function tool. Off by default: it is the one feature that sends anything
-   * to a third party (the reader service), so it must be opted into.
+   * function tool. Off by default: fetched URLs go to the third-party
+   * reader service in addition to the configured model provider.
    *
    * Optional and falsy-by-default, which is why existing chats need no
    * migration — a chat saved before this field existed simply has it absent.

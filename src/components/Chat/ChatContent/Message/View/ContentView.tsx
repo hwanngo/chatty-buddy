@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { hasToolMessages, isToolGroupMessage } from '../messageMutation';
 import React, { memo, useState } from 'react';
 
 import ReactMarkdown from 'react-markdown';
@@ -59,6 +61,13 @@ const ContentView = memo(
     priorSteps?: TimelineStep[];
   }) => {
     const { handleSubmit } = useSubmit();
+    const { t } = useTranslation();
+    const messages = useStore(
+      (state) => state.chats?.[state.currentChatIndex]?.messages ?? []
+    );
+    const toolGroup = isToolGroupMessage(messages, messageIndex);
+    const reorderBlocked = hasToolMessages(messages);
+    const toolReason = t('toolStructureLocked');
 
     const [isDelete, setIsDelete] = useState<boolean>(false);
     const [zoomedImage, setZoomedImage] = useState<string | null>(null);
@@ -78,6 +87,15 @@ const ContentView = memo(
       role === 'assistant' && messageIndex === lastMessageIndex && generating;
 
     const handleDelete = () => {
+      const state = useStore.getState();
+      if (
+        state.generating ||
+        isToolGroupMessage(
+          state.chats?.[currentChatIndex]?.messages ?? [],
+          messageIndex
+        )
+      )
+        return;
       const updatedChats: ChatInterface[] = JSON.parse(
         JSON.stringify(useStore.getState().chats)
       );
@@ -86,6 +104,16 @@ const ContentView = memo(
     };
 
     const handleMove = (direction: 'up' | 'down') => {
+      const state = useStore.getState();
+      const messages = state.chats?.[currentChatIndex]?.messages ?? [];
+      const target = messageIndex + (direction === 'up' ? -1 : 1);
+      if (
+        state.generating ||
+        hasToolMessages(messages) ||
+        !messages[messageIndex] ||
+        !messages[target]
+      )
+        return;
       const updatedChats: ChatInterface[] = JSON.parse(
         JSON.stringify(useStore.getState().chats)
       );
@@ -110,6 +138,14 @@ const ContentView = memo(
     };
 
     const handleRefresh = () => {
+      const state = useStore.getState();
+      const messages = state.chats?.[currentChatIndex]?.messages ?? [];
+      if (
+        state.generating ||
+        messageIndex !== messages.length - 1 ||
+        isToolGroupMessage(messages, messageIndex)
+      )
+        return;
       const updatedChats: ChatInterface[] = JSON.parse(
         JSON.stringify(useStore.getState().chats)
       );
@@ -126,10 +162,13 @@ const ContentView = memo(
     // `content` keeps the original, so editing and export are unaffected.
     // User messages are passed through untouched: a person quoting a `<think>`
     // tag means it literally.
-    const { reasoning, answer, isOpen: isThinkingOpen } =
-      role === 'assistant'
-        ? splitThinking(rawTextContent)
-        : { reasoning: '', answer: rawTextContent, isOpen: false };
+    const {
+      reasoning,
+      answer,
+      isOpen: isThinkingOpen,
+    } = role === 'assistant'
+      ? splitThinking(rawTextContent)
+      : { reasoning: '', answer: rawTextContent, isOpen: false };
 
     const currentTextContent = answer;
 
@@ -262,23 +301,54 @@ const ContentView = memo(
             </div>
           </Dialog>
         )}
+        {reorderBlocked && (
+          <p className='mt-2 text-xs text-[var(--fg-3)]'>{toolReason}</p>
+        )}
         <div className='flex justify-end gap-2 w-full mt-2'>
           {isDelete || (
             <>
               {!useStore.getState().generating &&
                 role === 'assistant' &&
                 messageIndex === lastMessageIndex && (
-                  <RefreshButton onClick={handleRefresh} />
+                  <RefreshButton
+                    onClick={handleRefresh}
+                    disabled={toolGroup}
+                    disabledReason={toolGroup ? toolReason : undefined}
+                  />
                 )}
-              {messageIndex !== 0 && <UpButton onClick={handleMoveUp} />}
+              {messageIndex !== 0 && (
+                <UpButton
+                  onClick={handleMoveUp}
+                  disabled={generating || reorderBlocked}
+                  disabledReason={reorderBlocked ? toolReason : undefined}
+                />
+              )}
               {messageIndex !== lastMessageIndex && (
-                <DownButton onClick={handleMoveDown} />
+                <DownButton
+                  onClick={handleMoveDown}
+                  disabled={generating || reorderBlocked}
+                  disabledReason={reorderBlocked ? toolReason : undefined}
+                />
               )}
 
               <MarkdownModeButton />
               <CopyButton onClick={handleCopy} />
-              <EditButton setIsEdit={setIsEdit} />
-              {!hideDelete && <DeleteButton setIsDelete={setIsDelete} />}
+              <EditButton
+                disabled={generating}
+                setIsEdit={(value) => {
+                  if (!useStore.getState().generating) setIsEdit(value);
+                }}
+              />
+              {!hideDelete && (
+                <DeleteButton
+                  disabled={generating || toolGroup}
+                  disabledReason={toolGroup ? toolReason : undefined}
+                  setIsDelete={(value) => {
+                    if (!useStore.getState().generating && !toolGroup)
+                      setIsDelete(value);
+                  }}
+                />
+              )}
             </>
           )}
           {isDelete && (
@@ -288,14 +358,14 @@ const ContentView = memo(
                 aria-label='cancel'
                 onClick={() => setIsDelete(false)}
               >
-                <Icon name="cross" />
+                <Icon name='cross' />
               </button>
               <button
                 className='tap-target p-1 text-[var(--fg-3)] hover:text-[var(--fg)] cursor-pointer transition-colors'
                 aria-label='confirm'
                 onClick={handleDelete}
               >
-                <Icon name="tick" />
+                <Icon name='tick' />
               </button>
             </>
           )}

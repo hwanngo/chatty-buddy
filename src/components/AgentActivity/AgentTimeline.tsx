@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PixelGrid } from './PixelGridLoader';
 import Dialog from '@components/Dialog';

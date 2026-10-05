@@ -1,10 +1,9 @@
-import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import useGStore from '@store/cloud-auth-store';
 import useStore from '@store/store';
-import { createJSONStorage } from 'zustand/middleware';
+import { stopCloudSync } from '@store/storage/GoogleCloudStorage';
 
 const GoogleSyncButton = ({ loginHandler }: { loginHandler?: () => void }) => {
   const { t } = useTranslation(['drive']);
@@ -21,24 +20,19 @@ const GoogleSyncButton = ({ loginHandler }: { loginHandler?: () => void }) => {
       setGoogleAccessToken(codeResponse.access_token);
       setCloudSync(true);
       loginHandler && loginHandler();
-      addToast('success', t('toast.sync'));
     },
     onError: (error) => {
-      console.log('Login Failed');
       addToast('error', error?.error_description || 'Error in authenticating!');
     },
     scope: 'https://www.googleapis.com/auth/drive.file',
   });
 
   const logout = () => {
+    stopCloudSync();
     setGoogleAccessToken(undefined);
     setSyncStatus('unauthenticated');
     setCloudSync(false);
     googleLogout();
-    useStore.persist.setOptions({
-      storage: createJSONStorage(() => localStorage),
-    });
-    useStore.persist.rehydrate();
     addToast('success', t('toast.stop'));
   };
 

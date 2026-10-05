@@ -1,8 +1,11 @@
-import React, { memo, useEffect, useState, useRef, ChangeEvent } from 'react';
+import React, { memo, useEffect, useState, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import useStore from '@store/store';
 
+import { supportsChatSearchModel } from '@api/api';
+import { supportsOpenAIHostedTools } from '@utils/api';
+import { isToolGroupMessage } from '../messageMutation';
 import useSubmit from '@hooks/useSubmit';
 
 import {
@@ -57,6 +60,14 @@ const EditView = ({
       : defaultModel;
   });
 
+  const toolGroup = useStore(
+    (state) =>
+      !sticky &&
+      isToolGroupMessage(
+        state.chats?.[state.currentChatIndex]?.messages ?? [],
+        messageIndex
+      )
+  );
   const [_content, _setContent] = useState<ContentInterface[]>(content);
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [imageUrl, setImageUrl] = useState<string>('');
@@ -120,27 +131,40 @@ const EditView = ({
       addToast('warning', t('onlyImagesSupported'));
     }
     if (imageFiles.length === 0) return;
-    const newImageURLs = imageFiles.map((file) => URL.createObjectURL(file));
-    const newImages = await Promise.all(
-      newImageURLs.map(async (url) => {
-        const blob = await fetch(url).then((r) => r.blob());
-        return {
-          type: 'image_url',
+    if (
+      imageFiles.some((file) => file.size > 2 * 1024 * 1024) ||
+      _content.filter((part) => part.type === 'image_url').length +
+        imageFiles.length >
+        4
+    ) {
+      addToast('warning', t('imageTooLarge'));
+      return;
+    }
+    try {
+      const newImages = await Promise.all(
+        imageFiles.map(async (file) => ({
+          type: 'image_url' as const,
           image_url: {
             detail: chat.imageDetail,
-            url: (await blobToBase64(blob)) as string,
+            url: (await blobToBase64(file)) as string,
           },
-        } as ImageContentInterface;
-      })
-    );
-    _setContent([..._content, ...newImages]);
+        }))
+      );
+      _setContent((draft) => [...draft, ...newImages]);
+    } catch {
+      addToast('error', t('fileReadError'));
+    }
   };
 
   const handleImageUrlChange = () => {
     if (imageUrl.trim() === '') return;
     // Only accept http(s) or data:image URLs; reject javascript:/file:/etc.
     const safeUrl = sanitizeImageUrl(imageUrl);
-    if (!safeUrl) {
+    if (
+      !safeUrl ||
+      safeUrl.length > 3 * 1024 * 1024 ||
+      _content.filter((part) => part.type === 'image_url').length >= 4
+    ) {
       addToast('warning', t('onlyImagesSupported'));
       return;
     }
@@ -162,9 +186,19 @@ const EditView = ({
   };
 
   const handleImageDetailChange = (index: number, detail: string) => {
-    const updatedImages = [..._content];
-    updatedImages[index + 1].image_url.detail = detail;
-    _setContent(updatedImages);
+    _setContent((parts) =>
+      parts.map((part, i) =>
+        i === index + 1 && part.type === 'image_url'
+          ? {
+              ...part,
+              image_url: {
+                ...part.image_url,
+                detail: detail as 'auto' | 'low' | 'high',
+              },
+            }
+          : part
+      )
+    );
   };
 
   const handleRemoveImage = (index: number) => {
@@ -173,162 +207,110 @@ const EditView = ({
 
     _setContent(updatedImages);
   };
-  const handleSave = () => {
-    const hasTextContent = (_content[0] as TextContentInterface).text !== '';
-    const hasImageContent =
-      Array.isArray(_content) &&
-      _content.some((content) => content.type === 'image_url');
-
-    if (
-      sticky &&
-      ((!hasTextContent && !hasImageContent) || useStore.getState().generating)
-    ) {
-      return;
-    }
-    const originalChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
+  const saveDraft = (generate: boolean): boolean => {
+    const state = useStore.getState();
+    if (state.generating || !state.chats?.[currentChatIndex]) return false;
+    const hasContent = _content.some((part) =>
+      part.type === 'text' ? part.text.trim().length > 0 : true
     );
-    const updatedChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
-    );
-    const updatedMessages = updatedChats[currentChatIndex].messages;
-
-    if (sticky) {
-      updatedMessages.push({ role: inputRole, content: _content });
-      _setContent([
-        {
-          type: 'text',
-          text: '',
-        } as TextContentInterface,
-      ]);
-      resetTextAreaHeight();
-    } else {
-      updatedMessages[messageIndex].content = _content;
-      setIsEdit(false);
-    }
+    if (sticky && !hasContent && !generate) return false;
+    const chat = state.chats[currentChatIndex];
+    if (generate && !sticky && isToolGroupMessage(chat.messages, messageIndex))
+      return false;
+    const messages = sticky
+      ? [
+          ...chat.messages,
+          ...(hasContent ? [{ role: inputRole, content: _content }] : []),
+        ]
+      : chat.messages.map((message, i) =>
+          i === messageIndex ? { ...message, content: _content } : message
+        );
+    const nextChat = {
+      ...chat,
+      messages:
+        generate && !sticky ? messages.slice(0, messageIndex + 1) : messages,
+    };
     try {
-      setChats(updatedChats);
-    } catch (error: unknown) {
-      if ((error as DOMException).name === 'QuotaExceededError') {
-        setChats(originalChats);
-        addToast('error', t('notifications.quotaExceeded', { ns: 'import' }));
-        // try to save text only
-        const textOnlyContent = _content.filter(isTextContent);
-        if (textOnlyContent.length > 0) {
-          updatedMessages[messageIndex].content = textOnlyContent;
-          try {
-            setChats(updatedChats);
-            addToast('success', t('notifications.textSavedOnly', { ns: 'import' }));
-          } catch (innerError: unknown) {
-            addToast('error', (innerError as Error).message);
-          }
-        }
-      } else {
-        addToast('error', (error as Error).message);
-      }
-    }
-  };
-
-  const { handleSubmit } = useSubmit();
-  const handleGenerate = () => {
-    const hasTextContent = (_content[0] as TextContentInterface).text !== '';
-    const hasImageContent =
-      Array.isArray(_content) &&
-      _content.some((content) => content.type === 'image_url');
-
-    if (useStore.getState().generating) {
-      return;
-    }
-
-    // validate API key before saving the user message to chat history
-    const { apiKey: _apiKey, apiEndpoint: _apiEndpoint } = useStore.getState();
-    if (
-      (!_apiKey || _apiKey.length === 0) &&
-      _apiEndpoint === officialAPIEndpoint
-    ) {
-      addToast('error', t('noApiKeyWarning', { ns: 'api' }) as string);
-      return;
-    }
-
-    const originalChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
-    );
-    const updatedChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
-    );
-    const updatedMessages = updatedChats[currentChatIndex].messages;
-
-    if (sticky) {
-      if (hasTextContent || hasImageContent) {
-        updatedMessages.push({ role: inputRole, content: _content });
-      }
-      _setContent([
-        {
-          type: 'text',
-          text: '',
-        } as TextContentInterface,
-      ]);
-      resetTextAreaHeight();
-    } else {
-      updatedMessages[messageIndex].content = _content;
-      updatedChats[currentChatIndex].messages = updatedMessages.slice(
-        0,
-        messageIndex + 1
+      setChats(
+        state.chats.map((item, i) => (i === currentChatIndex ? nextChat : item))
       );
-      setIsEdit(false);
+    } catch (error) {
+      addToast(
+        'error',
+        error instanceof DOMException && error.name === 'QuotaExceededError'
+          ? t('notifications.quotaExceeded', { ns: 'import' })
+          : (error as Error).message
+      );
+      return false;
     }
+    if (sticky) {
+      _setContent([{ type: 'text', text: '' }]);
+      resetTextAreaHeight();
+    } else setIsEdit(false);
+    return true;
+  };
+
+  const handleSave = () => {
+    saveDraft(false);
+  };
+  const { handleSubmit } = useSubmit();
+  const executeGenerate = () => {
+    const { apiKey, apiEndpoint } = useStore.getState();
+    if (!apiKey && apiEndpoint === officialAPIEndpoint) {
+      addToast('error', t('noApiKeyWarning', { ns: 'api' }));
+      return;
+    }
+    if (saveDraft(true)) void handleSubmit();
+  };
+
+  const handleGenerate = () => {
+    const state = useStore.getState();
+    if (
+      state.generating ||
+      (!sticky &&
+        isToolGroupMessage(
+          state.chats?.[state.currentChatIndex]?.messages ?? [],
+          messageIndex
+        ))
+    )
+      return;
+    if (sticky) executeGenerate();
+    else setIsModalOpen(true);
+  };
+
+  const handlePaste = async (
+    event: React.ClipboardEvent<HTMLTextAreaElement>
+  ) => {
+    const images = Array.from(event.clipboardData.items)
+      .filter((item) => item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((file): file is File => file !== null);
+    if (images.length === 0) return;
+    const imageCount = _content.filter(
+      (part) => part.type === 'image_url'
+    ).length;
+    if (
+      images.some((file) => file.size > 2 * 1024 * 1024) ||
+      imageCount + images.length > 4
+    ) {
+      addToast('warning', t('imageTooLarge'));
+      return;
+    }
+    const chat = useStore.getState().chats?.[currentChatIndex];
+    if (!chat) return;
     try {
-      setChats(updatedChats);
-    } catch (error: unknown) {
-      if ((error as DOMException).name === 'QuotaExceededError') {
-        setChats(originalChats);
-        addToast('error', t('notifications.quotaExceeded', { ns: 'import' }));
-        // try to save text only
-        const textOnlyContent = _content.filter(isTextContent);
-        if (textOnlyContent.length > 0) {
-          updatedMessages[messageIndex].content = textOnlyContent;
-          try {
-            setChats(updatedChats);
-            addToast('success', t('notifications.textSavedOnly', { ns: 'import' }));
-          } catch (innerError: unknown) {
-            addToast('error', (innerError as Error).message);
-          }
-        }
-      } else {
-        addToast('error', (error as Error).message);
-      }
-    }
-    handleSubmit();
-  };
-
-  const isTextContent = (
-    content: ContentInterface
-  ): content is TextContentInterface => {
-    return content.type === 'text';
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData.items;
-    const updatedChats: ChatInterface[] = JSON.parse(
-      JSON.stringify(useStore.getState().chats)
-    );
-    const chat = updatedChats[currentChatIndex];
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        const blob = item.getAsFile();
-        if (blob) {
-          const base64Image = (await blobToBase64(blob)) as string;
-          const newImage: ImageContentInterface = {
-            type: 'image_url',
-            image_url: {
-              detail: chat.imageDetail,
-              url: base64Image,
-            },
-          };
-          const updatedContent = [..._content, newImage];
-          _setContent(updatedContent);
-        }
-      }
+      const parts = await Promise.all(
+        images.map(async (file): Promise<ImageContentInterface> => ({
+          type: 'image_url',
+          image_url: {
+            detail: chat.imageDetail,
+            url: (await blobToBase64(file)) as string,
+          },
+        }))
+      );
+      _setContent((draft) => [...draft, ...parts]);
+    } catch {
+      addToast('error', t('fileReadError'));
     }
   };
 
@@ -383,11 +365,7 @@ const EditView = ({
           ))}
         </div>
       )}
-      <div
-        className={`w-full ${
-          sticky ? 'py-1 px-0 text-[var(--fg)]' : ''
-        }`}
-      >
+      <div className={`w-full ${sticky ? 'py-1 px-0 text-[var(--fg)]' : ''}`}>
         <div className='relative flex items-center gap-1'>
           {modelTypes[model] == 'image' && (
             <button
@@ -395,18 +373,19 @@ const EditView = ({
               onClick={handleUploadButtonClick}
               aria-label={t('uploadImages') as string}
             >
-              <Icon name="attachment" />
+              <Icon name='attachment' />
             </button>
           )}
           <textarea
             ref={textareaRef}
-            className='m-0 resize-none rounded-lg bg-transparent max-h-[200px] overflow-y-auto focus:ring-0 focus-visible:ring-0 leading-7 w-full placeholder:text-[var(--fg-3)]/60 pr-10'
+            className='m-0 resize-none rounded-lg bg-transparent min-h-7 max-h-[200px] overflow-y-auto focus:ring-0 focus-visible:ring-0 leading-7 w-full placeholder:text-[var(--fg-3)]/60 pr-10'
             onChange={(e) => {
               _setContent((prev) => [
                 { type: 'text', text: e.target.value },
                 ...prev.slice(1),
               ]);
             }}
+            aria-label={t('messageInput', { defaultValue: 'Message' })}
             value={(_content[0] as TextContentInterface).text}
             placeholder={
               role === 'system'
@@ -439,7 +418,7 @@ const EditView = ({
         handleRemoveImage={handleRemoveImage}
         handleGenerate={handleGenerate}
         handleSave={handleSave}
-        setIsModalOpen={setIsModalOpen}
+        structuralLocked={toolGroup}
         setIsEdit={setIsEdit}
         _setContent={_setContent}
         _content={_content}
@@ -454,7 +433,10 @@ const EditView = ({
           setIsModalOpen={setIsModalOpen}
           title={t('warning') as string}
           message={t('clearMessageWarning') as string}
-          handleConfirm={handleGenerate}
+          handleConfirm={() => {
+            setIsModalOpen(false);
+            executeGenerate();
+          }}
         />
       )}
     </div>
@@ -466,14 +448,10 @@ const EditViewButtons = memo(
     sticky = false,
     role,
     handleFileChange,
-    handleImageDetailChange,
-    handleRemoveImage,
     handleGenerate,
     handleSave,
-    setIsModalOpen,
+    structuralLocked,
     setIsEdit,
-    _setContent,
-    _content,
     imageUrl,
     setImageUrl,
     handleImageUrlChange,
@@ -487,7 +465,7 @@ const EditViewButtons = memo(
     handleRemoveImage: (index: number) => void;
     handleGenerate: () => void;
     handleSave: () => void;
-    setIsModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+    structuralLocked: boolean;
     setIsEdit: React.Dispatch<React.SetStateAction<boolean>>;
     _setContent: React.Dispatch<React.SetStateAction<ContentInterface[]>>;
     _content: ContentInterface[];
@@ -499,7 +477,7 @@ const EditViewButtons = memo(
   }) => {
     const { t } = useTranslation();
     const [showImageUrl, setShowImageUrl] = useState<boolean>(false);
-    const generating = useStore.getState().generating;
+    const generating = useStore((state) => state.generating);
 
     return (
       <div>
@@ -575,18 +553,19 @@ const EditViewButtons = memo(
             <button
               className='flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--border-mid)] bg-transparent text-[var(--fg-2)] text-[13px] font-medium hover:bg-[var(--bg-hover)] hover:text-[var(--fg)] transition-colors duration-150 cursor-pointer'
               onClick={handleSave}
+              disabled={generating}
               aria-label={t('save') as string}
             >
               {t('save')}
             </button>
             <button
               className='flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-lg bg-[var(--accent)] text-[var(--accent-fg)] text-[13px] font-medium hover:bg-[var(--accent-hover)] transition-colors duration-150 cursor-pointer border-0'
-              onClick={() => {
-                !generating && setIsModalOpen(true);
-              }}
+              onClick={handleGenerate}
+              disabled={generating || structuralLocked}
+              title={structuralLocked ? t('toolStructureLocked') : undefined}
               aria-label={t('generate') as string}
             >
-              <Icon name="send" />
+              <Icon name='send' />
               {t('generate')}
             </button>
           </div>
@@ -678,6 +657,11 @@ const InputToolbar = ({
   const fetchUrl = chat?.config.fetchUrl ?? false;
   const think = chat?.config.think ?? true;
   const apiType = useStore((state) => state.apiType);
+  const endpoint = useStore((state) => state.apiEndpoint);
+  const canSearch =
+    apiType === 'openai' &&
+    supportsOpenAIHostedTools(endpoint) &&
+    supportsChatSearchModel(chat?.config.model ?? '');
   const reasoningEffort = chat?.config.reasoningEffort ?? null;
   const imageDetail = chat?.imageDetail ?? 'auto';
 
@@ -747,8 +731,7 @@ const InputToolbar = ({
         setIsToolsOpen(false);
       }
     };
-    if (isToolsOpen)
-      document.addEventListener('mousedown', handleClickOutside);
+    if (isToolsOpen) document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isToolsOpen]);
 
@@ -793,8 +776,9 @@ const InputToolbar = ({
     const updatedChats: ChatInterface[] = JSON.parse(
       JSON.stringify(useStore.getState().chats)
     );
-    updatedChats[currentChatIndex].config.think =
-      !(updatedChats[currentChatIndex].config.think ?? true);
+    updatedChats[currentChatIndex].config.think = !(
+      updatedChats[currentChatIndex].config.think ?? true
+    );
     setChats(updatedChats);
   };
 
@@ -882,6 +866,9 @@ const InputToolbar = ({
               <button
                 type='button'
                 onClick={handleToggleWebSearch}
+                aria-pressed={webSearch}
+                disabled={!canSearch && !webSearch}
+                title={!canSearch ? t('webSearch.unsupported') : undefined}
                 className='w-full flex items-center justify-between gap-3 px-3 py-2.5 text-[13px] text-[var(--fg)] hover:bg-[var(--bg-hover)] transition-colors cursor-pointer'
               >
                 <span className='flex items-center gap-2'>
@@ -890,9 +877,7 @@ const InputToolbar = ({
                 </span>
                 <span
                   className={`relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full transition-colors ${
-                    webSearch
-                      ? 'bg-[var(--accent)]'
-                      : 'bg-[var(--border-mid)]'
+                    webSearch ? 'bg-[var(--accent)]' : 'bg-[var(--border-mid)]'
                   }`}
                 >
                   <span
@@ -903,7 +888,13 @@ const InputToolbar = ({
                 </span>
               </button>
 
-              {/* Fetch URL — client-executed tool, works on any endpoint */}
+              {!canSearch && (
+                <p className='max-w-[280px] px-3 pb-2 text-xs text-[var(--fg-3)]'>
+                  {t('webSearch.unsupported')}
+                </p>
+              )}
+
+              {/* Fetch URL — client-executed tool */}
               <button
                 type='button'
                 onClick={handleToggleFetchUrl}
@@ -1167,7 +1158,7 @@ const InputToolbar = ({
             }
             aria-label={tMain('generate') as string}
           >
-            <Icon name="send" />
+            <Icon name='send' />
             {tMain('generate')}
           </button>
         )}

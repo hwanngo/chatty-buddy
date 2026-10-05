@@ -8,14 +8,22 @@ import BaseButton from './BaseButton';
 const DeleteButton = memo(
   ({
     setIsDelete,
+    disabled = false,
+    disabledReason,
   }: {
     setIsDelete: React.Dispatch<React.SetStateAction<boolean>>;
+    disabled?: boolean;
+    disabledReason?: string;
   }) => {
     const { t } = useTranslation();
     return (
       <BaseButton
-        icon={<Icon name="delete" />}
-        buttonProps={{ 'aria-label': 'delete message', 'title': t('delete') }}
+        icon={<Icon name='delete' />}
+        buttonProps={{
+          disabled,
+          'aria-label': 'delete message',
+          'title': disabledReason ?? t('delete'),
+        }}
         onClick={() => setIsDelete(true)}
       />
     );

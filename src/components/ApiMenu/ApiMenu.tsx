@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { useTranslation, Trans } from 'react-i18next';
 import useStore from '@store/store';
 import Select from '@components/Select';
@@ -26,7 +26,6 @@ const ApiMenu = ({
 
   const apiKey = useStore((state) => state.apiKey);
   const setApiKey = useStore((state) => state.setApiKey);
-  const addToast = useStore((state) => state.addToast);
   const apiEndpoint = useStore((state) => state.apiEndpoint);
   const setApiEndpoint = useStore((state) => state.setApiEndpoint);
   const apiVersion = useStore((state) => state.apiVersion);
@@ -40,15 +39,35 @@ const ApiMenu = ({
     !availableEndpoints.includes(apiEndpoint)
   );
   const [_apiVersion, _setApiVersion] = useState<string>(apiVersion || '');
+  const fieldId = useId();
+  const [showKey, setShowKey] = useState(false);
+  const [error, setError] = useState('');
   const [_apiType, _setApiType] = useState<ApiType>(apiType ?? 'openai');
 
   const handleSave = () => {
-    if (firstRun && _apiKey.trim().length === 0) {
-      addToast('error', t('noApiKeyWarning', { ns: 'api' }) as string);
+    let endpoint: URL;
+    try {
+      endpoint = new URL(_apiEndpoint.trim());
+      if (
+        !['https:', 'http:'].includes(endpoint.protocol) ||
+        endpoint.username ||
+        endpoint.password
+      )
+        throw new Error();
+    } catch {
+      setError(t('invalidEndpoint', { ns: 'api' }));
       return;
     }
+    if (
+      ['api.openai.com', 'api.anthropic.com'].includes(endpoint.hostname) &&
+      !_apiKey.trim()
+    ) {
+      setError(t('noApiKeyWarning', { ns: 'api' }));
+      return;
+    }
+    setError('');
     setApiKey(_apiKey);
-    setApiEndpoint(_apiEndpoint);
+    setApiEndpoint(_apiEndpoint.trim());
     setApiVersion(_apiVersion);
     setApiType(_apiType);
     // The new endpoint may serve an entirely different set of models; refresh
@@ -80,9 +99,7 @@ const ApiMenu = ({
 
   return (
     <Dialog
-      title={
-        (firstRun ? t('setupApiKey', { ns: 'api' }) : t('api')) as string
-      }
+      title={(firstRun ? t('setupApiKey', { ns: 'api' }) : t('api')) as string}
       setIsModalOpen={setIsModalOpen}
       handleConfirm={handleSave}
       cancelButton={!firstRun}
@@ -106,14 +123,19 @@ const ApiMenu = ({
         />
 
         <div>
-          <label className='block text-sm font-medium text-[var(--fg)] mb-1.5'>
+          <label
+            htmlFor={`${fieldId}-endpoint`}
+            className='block text-sm font-medium text-[var(--fg)] mb-1.5'
+          >
             {t('apiEndpoint.inputLabel', { ns: 'api' })}
           </label>
           {_customEndpoint ||
           _apiType === 'anthropic' ||
           _apiType === 'ollama' ? (
             <input
-              type='text'
+              id={`${fieldId}-endpoint`}
+              type='url'
+              aria-describedby={error ? `${fieldId}-error` : undefined}
               className='w-full text-[var(--fg)] px-3 py-2 text-sm bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--focus)]'
               value={_apiEndpoint}
               onChange={(e) => {
@@ -128,53 +150,72 @@ const ApiMenu = ({
           )}
         </div>
 
-        {_customEndpoint &&
-          _apiType === 'openai' &&
-          _apiEndpoint &&
-          !_apiEndpoint.includes('openai.com') &&
-          !_apiEndpoint.includes('openai.azure.com') && (
-            <div className='px-3 py-2 rounded-md bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs flex items-start gap-1.5'>
-              <svg
-                width={14}
-                height={14}
-                viewBox='0 0 16 16'
-                fill='none'
-                style={{ display: 'inline', flexShrink: 0 }}
-              >
-                <path
-                  d='M8 2L14.5 13H1.5L8 2Z'
-                  stroke='currentColor'
-                  strokeWidth='1.5'
-                  strokeLinejoin='round'
-                />
-                <path
-                  d='M8 7v3M8 11.5v.5'
-                  stroke='currentColor'
-                  strokeWidth='1.5'
-                  strokeLinecap='round'
-                />
-              </svg>
-              <span>
-                {t('thirdPartyEndpointWarning', {
-                  ns: 'api',
-                  endpoint: _apiEndpoint,
-                })}
-              </span>
-            </div>
-          )}
+        {_apiEndpoint && (
+          <div className='px-3 py-2 rounded-md bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 text-yellow-800 dark:text-yellow-200 text-xs flex items-start gap-1.5'>
+            <svg
+              width={14}
+              height={14}
+              viewBox='0 0 16 16'
+              fill='none'
+              style={{ display: 'inline', flexShrink: 0 }}
+            >
+              <path
+                d='M8 2L14.5 13H1.5L8 2Z'
+                stroke='currentColor'
+                strokeWidth='1.5'
+                strokeLinejoin='round'
+              />
+              <path
+                d='M8 7v3M8 11.5v.5'
+                stroke='currentColor'
+                strokeWidth='1.5'
+                strokeLinecap='round'
+              />
+            </svg>
+            <span>
+              {t('thirdPartyEndpointWarning', {
+                ns: 'api',
+                endpoint: _apiEndpoint,
+              })}
+            </span>
+          </div>
+        )}
 
         <div>
-          <label className='block text-sm font-medium text-[var(--fg)] mb-1.5'>
+          <label
+            htmlFor={`${fieldId}-key`}
+            className='block text-sm font-medium text-[var(--fg)] mb-1.5'
+          >
             {t('apiKey.inputLabel', { ns: 'api' })}
           </label>
           <input
-            type='text'
+            id={`${fieldId}-key`}
+            type={showKey ? 'text' : 'password'}
+            autoComplete='off'
+            spellCheck={false}
             className='w-full text-[var(--fg)] px-3 py-2 text-sm bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--focus)]'
             value={_apiKey}
             onChange={(e) => {
               _setApiKey(e.target.value);
             }}
           />
+          <button
+            type='button'
+            className='mt-2 text-sm text-[var(--accent)]'
+            aria-pressed={showKey}
+            onClick={() => setShowKey(!showKey)}
+          >
+            {t(showKey ? 'hideKey' : 'showKey', { ns: 'api' })}
+          </button>
+          {error && (
+            <p
+              id={`${fieldId}-error`}
+              role='alert'
+              className='mt-2 text-sm text-[var(--error)]'
+            >
+              {error}
+            </p>
+          )}
         </div>
 
         {_apiType === 'openai' && isAzureEndpoint(_apiEndpoint) && (
@@ -184,6 +225,7 @@ const ApiMenu = ({
             </label>
             <input
               type='text'
+              aria-label={t('apiVersion.inputLabel', { ns: 'api' })}
               placeholder={t('apiVersion.description', { ns: 'api' }) ?? ''}
               className='w-full text-[var(--fg)] px-3 py-2 text-sm bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--focus)]'
               value={_apiVersion}
@@ -196,17 +238,23 @@ const ApiMenu = ({
 
         <div className='text-[var(--fg-2)] text-sm leading-relaxed pt-1 border-t border-[var(--border-mid)]'>
           <p>
-            <Trans
-              i18nKey='apiKey.howTo'
-              ns='api'
-              components={[
-                <a
-                  href='https://platform.openai.com/account/api-keys'
-                  className='link'
-                  target='_blank'
-                />,
-              ]}
-            />{' '}
+            {_apiType !== 'ollama' && (
+              <Trans
+                i18nKey='apiKey.howTo'
+                ns='api'
+                components={[
+                  <a
+                    href={
+                      _apiType === 'anthropic'
+                        ? 'https://console.anthropic.com/settings/keys'
+                        : 'https://platform.openai.com/api-keys'
+                    }
+                    className='link'
+                    target='_blank'
+                  />,
+                ]}
+              />
+            )}{' '}
             <span className='text-[var(--fg-3)]'>
               {t('apiKey.browserStorageNote', { ns: 'api' })}
             </span>

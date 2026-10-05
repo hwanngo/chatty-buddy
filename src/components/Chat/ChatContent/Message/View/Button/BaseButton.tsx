@@ -12,7 +12,7 @@ const BaseButton = ({
   return (
     <div className='text-[var(--fg-3)] flex self-end lg:self-center justify-center gap-3 md:gap-4 visible'>
       <button
-        className='tap-target p-1 rounded-md text-[var(--fg-3)] hover:bg-[var(--border)] hover:text-[var(--fg)] transition-colors duration-100 md:invisible md:group-hover:visible cursor-pointer'
+        className='tap-target p-1 rounded-md text-[var(--fg-3)] hover:bg-[var(--border)] hover:text-[var(--fg)] transition-colors duration-100 md:opacity-50 md:group-hover:opacity-100 focus-visible:opacity-100 cursor-pointer'
         onClick={onClick}
         {...buttonProps}
       >

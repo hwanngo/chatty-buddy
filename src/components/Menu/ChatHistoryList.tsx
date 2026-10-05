@@ -34,7 +34,9 @@ const ChatHistoryList = () => {
   );
 
   const chatsRef = useRef<ChatInterface[]>(useStore.getState().chats || []);
-  const foldersRef = useRef<FolderCollection>(useStore.getState().folders || {});
+  const foldersRef = useRef<FolderCollection>(
+    useStore.getState().folders || {}
+  );
   const filterRef = useRef<string>(filter);
 
   const updateFolders = useRef(() => {
@@ -144,11 +146,7 @@ const ChatHistoryList = () => {
   }, [displayChatSize]);
 
   useEffect(() => {
-    if (
-      chats &&
-      currentChatIndex >= 0 &&
-      currentChatIndex < chats.length
-    ) {
+    if (chats && currentChatIndex >= 0 && currentChatIndex < chats.length) {
       // set title
       document.title = chats[currentChatIndex].title;
 
@@ -239,14 +237,6 @@ const ChatHistoryList = () => {
       </div>
       <div className='w-full h-10' />
     </div>
-  );
-};
-
-const ShowMoreButton = () => {
-  return (
-    <button className='btn relative btn-dark btn-small m-auto mb-2'>
-      <div className='flex items-center justify-center gap-2'>Show more</div>
-    </button>
   );
 };
 

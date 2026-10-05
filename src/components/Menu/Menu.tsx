@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useStore from '@store/store';
 import {
@@ -56,13 +56,16 @@ const Menu = () => {
 
   useEffect(() => {
     if (window.innerWidth < 768) setHideSideMenu(true);
-    window.addEventListener('resize', () => {
+    const handleResize = () => {
       if (
         windowWidthRef.current !== window.innerWidth &&
         window.innerWidth < 768
       )
         setHideSideMenu(true);
-    });
+      windowWidthRef.current = window.innerWidth;
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const handleMouseDown = () => {
@@ -97,7 +100,11 @@ const Menu = () => {
         }`}
         style={{ width: `${menuWidth}px` }}
       >
-        <div className='flex h-full min-h-0 flex-col'>
+        <div
+          inert={hideSideMenu}
+          aria-hidden={hideSideMenu}
+          className='flex h-full min-h-0 flex-col'
+        >
           {/* ── Header ─────────────────────────────────── */}
           <div className='flex items-center gap-1.5 px-2.5 py-3 border-b border-[var(--border)]'>
             <NewChat />
@@ -111,7 +118,7 @@ const Menu = () => {
               }
               className='flex items-center justify-center w-[34px] h-[34px] rounded-lg border border-[var(--border-mid)] bg-[var(--bg-hover)] text-[var(--fg-2)] hover:bg-[var(--bg-sand)] hover:text-[var(--fg)] transition-colors duration-150 shrink-0 cursor-pointer'
             >
-              {theme === 'dark' ? <Icon name="sun" /> : <Icon name="moon" />}
+              {theme === 'dark' ? <Icon name='sun' /> : <Icon name='moon' />}
             </button>
           </div>
 
@@ -178,31 +185,36 @@ const Menu = () => {
         </div>
 
         {/* Mobile close button */}
-        <div
+        <button
+          type='button'
+          aria-label={t('common.close')}
           id='menu-close'
           className={`${
             hideSideMenu ? 'hidden' : ''
           } md:hidden absolute z-[999] right-0 translate-x-full top-10 bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-lg p-2 cursor-pointer hover:bg-[var(--bg)] text-[var(--fg-2)]`}
           onClick={() => setHideSideMenu(true)}
         >
-          <Icon name="cross2" />
-        </div>
+          <Icon name='cross2' />
+        </button>
 
         {/* Desktop sidebar toggle */}
-        <div
+        <button
+          type='button'
+          aria-label={t('toggleSidebar', { defaultValue: 'Toggle sidebar' })}
+          aria-expanded={!hideSideMenu}
           className={`${
-            hideSideMenu ? 'opacity-100' : 'opacity-0'
-          } group/menu md:group-hover/menu:opacity-100 max-md:hidden transition-opacity absolute z-[999] right-0 translate-x-full top-14 bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-md p-1 cursor-pointer hover:bg-[var(--bg)] text-[var(--fg-2)] ${
+            hideSideMenu ? 'opacity-100' : 'opacity-70'
+          } group/menu md:group-hover/menu:opacity-100 focus-visible:opacity-100 max-md:hidden transition-opacity absolute z-[999] right-0 translate-x-full top-14 bg-[var(--bg-hover)] border border-[var(--border-mid)] rounded-md p-1 cursor-pointer hover:bg-[var(--bg)] text-[var(--fg-2)] ${
             hideSideMenu ? '' : 'rotate-90'
           }`}
           onClick={() => setHideSideMenu(!hideSideMenu)}
         >
           {hideSideMenu ? (
-            <Icon name="menu" className='h-4 w-4' />
+            <Icon name='menu' className='h-4 w-4' />
           ) : (
-            <Icon name="downArrow" className='h-4 w-4' />
+            <Icon name='downArrow' className='h-4 w-4' />
           )}
-        </div>
+        </button>
 
         {/* Resize handle */}
         <div
