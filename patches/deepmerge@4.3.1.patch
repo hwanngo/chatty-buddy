@@ -1,0 +1,60 @@
+diff --git a/dist/cjs.js b/dist/cjs.js
+index 7c36cbdd06cc22c92d590be3f87a08a91ca06b40..55aea666342eeaf0474695bc0efa8b2a0c43b663 100644
+--- a/dist/cjs.js
++++ b/dist/cjs.js
+@@ -80,11 +80,14 @@ function mergeObject(target, source, options) {
+ 	var destination = {};
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype") {
++				return
++			}
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 		});
+ 	}
+ 	getKeys(source).forEach(function(key) {
+-		if (propertyIsUnsafe(target, key)) {
++		if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
+ 
+diff --git a/dist/umd.js b/dist/umd.js
+index 4071e7c56ec8e5273fe166f6e723ac460fab8b72..c9b0cfe4161fadb2738a29cc772e5d04a85aa8c2 100644
+--- a/dist/umd.js
++++ b/dist/umd.js
+@@ -84,11 +84,14 @@
+ 		var destination = {};
+ 		if (options.isMergeableObject(target)) {
+ 			getKeys(target).forEach(function(key) {
++				if (key === "__proto__" || key === "constructor" || key === "prototype") {
++					return
++				}
+ 				destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
+ 			});
+ 		}
+ 		getKeys(source).forEach(function(key) {
+-			if (propertyIsUnsafe(target, key)) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 				return
+ 			}
+ 
+diff --git a/index.js b/index.js
+index 77968aed5d456cccc294f60912ef381fa1e52a7b..8b5fcff239e1c2fe35bc68be0782438cbbdab725 100644
+--- a/index.js
++++ b/index.js
+@@ -55,11 +55,14 @@ function mergeObject(target, source, options) {
+ 	var destination = {}
+ 	if (options.isMergeableObject(target)) {
+ 		getKeys(target).forEach(function(key) {
++			if (key === "__proto__" || key === "constructor" || key === "prototype") {
++				return
++			}
+ 			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options)
+ 		})
+ 	}
+ 	getKeys(source).forEach(function(key) {
+-		if (propertyIsUnsafe(target, key)) {
++		if (key === "__proto__" || key === "constructor" || key === "prototype" || propertyIsUnsafe(target, key)) {
+ 			return
+ 		}
+ 
